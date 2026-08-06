@@ -46,6 +46,17 @@ export default {
             label: { en: "Toggle lane header" },
             action: "toggleLaneHeaderCollapsed",
         },
+        {
+            label: { en: "Toggle lane" },
+            action: "toggleLaneCollapsed",
+            args: [
+                {
+                    name: "lane",
+                    label: { en: "Lane value" },
+                    type: "Text",
+                },
+            ],
+        },
     ],
     triggerEvents: [
         {
@@ -78,12 +89,13 @@ export default {
         },
         laneElement: {
             hidden: true,
-            // A plain stock container, not a coded component - it only ever needs to be
-            // stylable (background/border/padding for the whole row), never anything
-            // functional, so there's no reason to fork a dedicated element for it.
-            defaultValue: {
-                isWwObject: true,
-                type: "ww-flexbox",
+            // A dropzone (array), same mechanism as headerElement/itemElement/laneHeaderElement -
+            // NOT a nested element type reference. Only needs to be stylable (background/border/
+            // padding for the whole row), never functional, so a plain stock container as the
+            // default is enough - no reason to fork a dedicated element for it.
+            defaultValue: [{ isWwObject: true, type: "ww-flexbox" }],
+            navigator: {
+                group: "Lane background",
             },
         },
         laneHeaderElement: {
@@ -91,6 +103,13 @@ export default {
             defaultValue: [{ isWwObject: true, type: "ww-flexbox" }],
             navigator: {
                 group: "Lane header",
+            },
+        },
+        collapsedLaneHeaderElement: {
+            hidden: true,
+            defaultValue: [{ isWwObject: true, type: "ww-flexbox" }],
+            navigator: {
+                group: "Collapsed lane header",
             },
         },
         wrapStacks: {

@@ -93,23 +93,36 @@
 
             <!--
                 laneElement gives the row itself something stylable - background, border, the
-                works - the way stackElement already does for a column. It can't literally
-                CONTAIN the stack cells below (a nested element reference like this renders
-                whatever the referenced component defines internally, same reason stackElement
-                doesn't "contain" anything ww-kanban injects either), so it's a background layer:
-                absolutely positioned to fill the row, sitting behind the real header/cells via
-                z-index, with pointer-events disabled so it never intercepts drags meant for the
-                interactive content on top of it.
+                works - the way stackElement already does for a column. It's a dropzone
+                (wwLayout), the same mechanism as laneHeaderElement/headerElement/itemElement -
+                NOT a nested element type reference (that only resolves real registered UUIDs,
+                which is why a stock-element shorthand there rendered as "Element undefined").
+                It can't literally CONTAIN the stack cells below (this is a fixed, standalone
+                dropzone slot, not something ww-kanban injects other rendered content into), so
+                it's a background layer: absolutely positioned to fill the row, sitting behind
+                the real header/cells via z-index, with pointer-events disabled so it never
+                intercepts drags meant for the interactive content on top of it.
             -->
-            <div v-for="(lane, laneIndex) in visibleLanes" :key="'ww-lane-' + laneIndex" class="ww-kanban-lane-wrapper">
+            <div
+                v-for="(lane, laneIndex) in visibleLanes"
+                :key="'ww-lane-' + laneIndex"
+                class="ww-kanban-lane-wrapper"
+            >
                 <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
-                    <wwElement v-bind="content.laneElement" class="ww-kanban-lane-background"></wwElement>
+                    <wwLayout
+                        path="laneElement"
+                        class="ww-kanban-lane-background"
+                        :class="{ 'ww-kanban-lane-background--collapsed': isLaneCollapsed(lane.value) }"
+                    ></wwLayout>
                 </wwLayoutItemContext>
 
-                <div class="ww-kanban-grid-row ww-kanban-lane">
+                <div
+                    class="ww-kanban-grid-row ww-kanban-lane"
+                    :class="{ 'ww-kanban-lane--collapsed': isLaneCollapsed(lane.value) }"
+                >
                     <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
                         <wwLayout
-                            path="laneHeaderElement"
+                            :path="isLaneCollapsed(lane.value) ? 'collapsedLaneHeaderElement' : 'laneHeaderElement'"
                             class="ww-kanban-lane-header"
                             :class="{
                                 'ww-kanban-lane-header--collapsed': laneHeaderCollapsed,
@@ -272,6 +285,11 @@ export default {
             defaultValue: false,
         });
 
+        // Keyed by lane value, unlike laneHeaderCollapsed above - each lane is a distinct row,
+        // so collapsing one shouldn't affect any other, the same principle collapsedStacks
+        // already uses per stack (just the other axis).
+        const collapsedLanes = reactive({});
+
         const { setValue: setDrag } = wwLib.wwVariable.useComponentVariable({
             uid: props.uid,
             name: "isDragging",
@@ -305,7 +323,7 @@ export default {
             { deep: true }
         );
 
-        return { isDragging, collapsedStacks, laneHeaderCollapsed, setLaneHeaderCollapsed };
+        return { isDragging, collapsedStacks, laneHeaderCollapsed, setLaneHeaderCollapsed, collapsedLanes };
     },
     computed: {
         stacks() {
@@ -515,6 +533,12 @@ export default {
                 this._setCollapsedStacks(Object.keys(value).filter((key) => value[key]));
             },
         },
+        collapsedLanes: {
+            deep: true,
+            handler(value) {
+                this._setCollapsedLanes(Object.keys(value).filter((key) => value[key]));
+            },
+        },
     },
     created() {
         // Not inside setup() because the counts they publish are derived from the Options-API
@@ -541,12 +565,21 @@ export default {
             defaultValue: [],
             readonly: true,
         });
+        const { setValue: setCollapsedLanes } = wwLib.wwVariable.useComponentVariable({
+            uid: this.uid,
+            name: "collapsedLanes",
+            type: "array",
+            defaultValue: [],
+            readonly: true,
+        });
         this._setStackCounts = setStackCounts;
         this._setLaneCounts = setLaneCounts;
         this._setCollapsedStacks = setCollapsedStacks;
+        this._setCollapsedLanes = setCollapsedLanes;
         setStackCounts(this.stackCounts);
         setLaneCounts(this.laneCounts);
         setCollapsedStacks(Object.keys(this.collapsedStacks).filter((key) => this.collapsedStacks[key]));
+        setCollapsedLanes(Object.keys(this.collapsedLanes).filter((key) => this.collapsedLanes[key]));
     },
     methods: {
         buildStackCells(items, filterEmpty) {
@@ -620,6 +653,18 @@ export default {
         },
         toggleLaneHeaderCollapsed() {
             this.setLaneHeaderCollapsed(!this.laneHeaderCollapsed);
+        },
+        isLaneCollapsed(laneValue) {
+            return !!this.collapsedLanes[laneValue ?? ""];
+        },
+        // WeWeb passes action args through in a way I haven't verified elsewhere in this
+        // codebase (everything else here is a zero-argument action), so this defensively
+        // accepts either an { lane } object or a bare value - worth confirming this actually
+        // works as expected, unlike the rest of the action/dropzone patterns which are proven.
+        toggleLaneCollapsed(args) {
+            const laneValue = args && typeof args === "object" ? args.lane : args;
+            const key = laneValue ?? "";
+            this.collapsedLanes[key] = !this.collapsedLanes[key];
         },
         compareItems(a, b) {
             if (!this.content.sortedBy) return 0;
@@ -742,5 +787,17 @@ export default {
 .ww-kanban-grid-row.ww-kanban-lane {
     position: relative;
     z-index: 1;
+}
+
+/*
+ * Collapsing a lane hides only its stack cells (.ww-kanban-stack), not the whole row - the
+ * lane-header cell stays, both because it's the only remaining click target for re-expanding
+ * and because hiding it too would lose the label saying which lane this even is. The row's
+ * height then naturally shrinks to whatever the header needs, no explicit height required (this
+ * isn't a grid-track width problem the way stack collapse was - .ww-kanban-grid is flex, not
+ * grid, so ordinary content-driven height works here).
+ */
+.ww-kanban-lane--collapsed .ww-kanban-stack {
+    display: none;
 }
 </style>
