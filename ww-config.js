@@ -85,7 +85,7 @@ export default {
             //hipped-ww-lane
             defaultValue: {
                 isWwObject: true,
-                type: "TODO-hipped-ww-lane-type-id",
+                type: "f5cb5cc2-0d77-42b4-8315-0a8510570ae3",
             },
         },
         wrapStacks: {
