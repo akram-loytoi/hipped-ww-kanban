@@ -9,7 +9,7 @@
         :style="kanbanStyle"
     >
         <template v-if="!swimlanesEnabled">
-            <template v-if="content.uncategorizedStack && (!hideEmptyStacks || uncategorizedStack.count > 0)">
+            <template v-if="showUncategorizedStackColumn">
                 <wwLayoutItemContext :index="0" :item="null" :data="uncategorizedStack" is-repeat>
                     <wwElement
                         v-bind="content.stackElement"
@@ -38,58 +38,94 @@
             </template>
         </template>
 
+        <!--
+            Swimlanes are a real grid, not lanes nesting stacks or the other way round: every
+            cell below (chrome header row, each lane's cells, chrome footer row) is a direct
+            child of .ww-kanban and relies on CSS Grid auto-flow to land in the right row, with
+            only the lane header/footer explicitly spanning all columns. boardColumns is the one
+            fixed, board-wide column list every row iterates - so a column always lines up under
+            the same header regardless of which lanes are empty for it.
+        -->
         <template v-else>
-            <div
-                v-for="(lane, laneIndex) in visibleLanes"
-                :key="'ww-lane-' + laneIndex"
-                class="ww-kanban-lane"
-                :class="{ 'ww-kanban-lane--over-limit': lane.isOverLimit }"
+            <wwLayoutItemContext
+                v-for="(column, columnIndex) in boardColumns"
+                :key="'ww-stack-chrome-header-' + columnIndex"
+                :index="columnIndex"
+                :item="null"
+                is-repeat
+                :data="column"
+                :repeated-items="boardColumns"
             >
+                <wwElement
+                    v-bind="content.stackElement"
+                    :ww-props="{
+                        ...stackConfig,
+                        items: [],
+                        stack: column.value,
+                        collapsed: isStackCollapsed(column.value),
+                        hideFooter: true,
+                        group: chromeGroup,
+                        sortable: false,
+                    }"
+                    class="ww-kanban-stack ww-kanban-stack--chrome"
+                    :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
+                ></wwElement>
+            </wwLayoutItemContext>
+
+            <template v-for="(lane, laneIndex) in visibleLanes" :key="'ww-lane-' + laneIndex">
                 <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
                     <wwLayout path="laneHeaderElement" class="ww-kanban-lane-header"></wwLayout>
                 </wwLayoutItemContext>
 
-                <div class="ww-kanban-lane-body">
-                    <template v-if="content.uncategorizedStack && (!hideEmptyStacks || lane.uncategorizedStack.count > 0)">
-                        <wwLayoutItemContext :index="0" :item="null" :data="lane.uncategorizedStack" is-repeat>
-                            <wwElement
-                                v-bind="content.stackElement"
-                                :ww-props="{
-                                    ...stackConfig,
-                                    items: lane.uncategorizedStack.items,
-                                    stack: null,
-                                    lane: lane.value,
-                                    collapsed: isStackCollapsed(null),
-                                }"
-                                class="ww-kanban-stack"
-                                :states="isDragging ? ['dragging'] : []"
-                            ></wwElement>
-                        </wwLayoutItemContext>
-                    </template>
-
-                    <template v-for="(stack, stackIndex) in lane.stacks" :key="'ww-stack-' + laneIndex + '-' + stackIndex">
-                        <wwLayoutItemContext :index="stackIndex" :item="null" is-repeat :data="stack" :repeated-items="lane.stacks">
-                            <wwElement
-                                v-bind="content.stackElement"
-                                :ww-props="{
-                                    ...stackConfig,
-                                    items: stack.items,
-                                    stack: stack.value,
-                                    lane: lane.value,
-                                    collapsed: isStackCollapsed(stack.value),
-                                }"
-                                class="ww-kanban-stack"
-                                :class="{ 'ww-kanban-stack--over-limit': stack.isOverLimit }"
-                                :states="isDragging ? ['dragging'] : []"
-                            ></wwElement>
-                        </wwLayoutItemContext>
-                    </template>
-                </div>
+                <template v-for="(column, columnIndex) in lane.columns" :key="'ww-stack-' + laneIndex + '-' + columnIndex">
+                    <wwLayoutItemContext :index="columnIndex" :item="null" is-repeat :data="column" :repeated-items="lane.columns">
+                        <wwElement
+                            v-bind="content.stackElement"
+                            :ww-props="{
+                                ...stackConfig,
+                                items: column.items,
+                                stack: column.value,
+                                lane: lane.value,
+                                collapsed: isStackCollapsed(column.value),
+                                hideHeader: true,
+                                hideFooter: true,
+                            }"
+                            class="ww-kanban-stack"
+                            :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
+                            :states="isDragging ? ['dragging'] : []"
+                        ></wwElement>
+                    </wwLayoutItemContext>
+                </template>
 
                 <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
                     <wwLayout path="laneFooterElement" class="ww-kanban-lane-footer"></wwLayout>
                 </wwLayoutItemContext>
-            </div>
+            </template>
+
+            <wwLayoutItemContext
+                v-for="(column, columnIndex) in boardColumns"
+                :key="'ww-stack-chrome-footer-' + columnIndex"
+                :index="columnIndex"
+                :item="null"
+                is-repeat
+                :data="column"
+                :repeated-items="boardColumns"
+            >
+                <wwElement
+                    v-bind="content.stackElement"
+                    :ww-props="{
+                        ...stackConfig,
+                        items: [],
+                        stack: column.value,
+                        collapsed: isStackCollapsed(column.value),
+                        hideHeader: true,
+                        group: chromeGroup,
+                        sortable: false,
+                    }"
+                    class="ww-kanban-stack ww-kanban-stack--chrome"
+                    :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
+                ></wwElement>
+            </wwLayoutItemContext>
         </template>
     </div>
 </template>
@@ -165,10 +201,10 @@ export default {
             isDraggingManager[`${lane ?? ""}::${stack ?? ""}`] = isDragging;
         });
 
-        // Collapse is deliberately keyed by stack value alone, not stack+lane: a stack's header
-        // is now only ever rendered once (see the dedup CSS below), so it's the only click target
-        // available, and collapsing it collapses that column in every lane at once rather than
-        // each lane's cell independently.
+        // Collapse is keyed by stack value alone, not stack+lane: a stack's header is now only
+        // ever rendered once, in the dedicated chrome row (see boardColumns/template), so it's
+        // the only click target available, and collapsing it collapses that column in every lane
+        // at once rather than each lane's cell independently.
         const collapsedStacks = reactive({});
         provide("customCollapseHandler", ({ stack }) => {
             const key = stack ?? "";
@@ -236,6 +272,15 @@ export default {
         hideEmptyLanes() {
             return this.content.hideEmptyLanes !== false;
         },
+        chromeGroup() {
+            // A drag group nothing else shares, so the header/footer chrome cells (which always
+            // have zero items and belong to no lane) can never register as a real drop target -
+            // dropping a card there would otherwise silently strip its lane assignment.
+            return "ww-kanban-chrome-" + this.uid;
+        },
+        showUncategorizedStackColumn() {
+            return !!this.content.uncategorizedStack && (!this.hideEmptyStacks || this.uncategorizedStack.count > 0);
+        },
         laneValues() {
             // Lanes are auto-discovered, not configured: every distinct, resolvable `lanedBy`
             // value seen across items becomes a lane, in first-seen order (laneSortedBy handles
@@ -254,10 +299,19 @@ export default {
             return values;
         },
         internalStacks() {
-            return this.buildStacks(this.items);
+            // Board-wide, hideEmptyStacks-filtered stack list. In swimlane mode this doubles as
+            // the fixed column set (via boardColumns) - a column exists if it has items ANYWHERE
+            // on the board, not just in the current lane, so every lane shows the same columns
+            // in the same order and stays aligned under one shared header.
+            return this.buildStackCells(this.items, this.hideEmptyStacks);
         },
         uncategorizedStack() {
             return this.buildUncategorizedStack(this.items);
+        },
+        boardColumns() {
+            if (!this.swimlanesEnabled) return [];
+            const columns = this.showUncategorizedStackColumn ? [this.uncategorizedStack] : [];
+            return columns.concat(this.internalStacks);
         },
         internalLanes() {
             if (!this.swimlanesEnabled) return [];
@@ -325,9 +379,16 @@ export default {
             };
         },
         kanbanStyle() {
-            return {
+            const style = {
                 "--wrap-stacks": this.content.wrapStacks ? "wrap" : "nowrap",
             };
+            if (this.swimlanesEnabled) {
+                // Column tracks size to content (auto) rather than a forced equal 1fr split, so
+                // whatever width each stack already has via the style panel keeps working instead
+                // of being overridden by the grid.
+                style["grid-template-columns"] = `repeat(${this.boardColumns.length}, auto)`;
+            }
+            return style;
         },
         isReadonly() {
             /* wwEditor:start */
@@ -401,9 +462,9 @@ export default {
         setCollapsedStacks(Object.keys(this.collapsedStacks).filter((key) => this.collapsedStacks[key]));
     },
     methods: {
-        buildStacks(items) {
+        buildStackCells(items, filterEmpty) {
             const limit = this.content.stackWipLimit;
-            const stacks = this.stackDefs.map((stack) => {
+            const cells = this.stackDefs.map((stack) => {
                 const stackItems = items
                     .filter((item) => wwLib.resolveObjectPropertyPath(item, this.content.stackedBy) === stack.value)
                     .sort(this.compareItems);
@@ -416,7 +477,7 @@ export default {
                     isOverLimit: limit > 0 && count >= limit,
                 };
             });
-            return this.hideEmptyStacks ? stacks.filter((stack) => stack.count > 0) : stacks;
+            return filterEmpty ? cells.filter((cell) => cell.count > 0) : cells;
         },
         buildUncategorizedStack(items) {
             const stackValues = this.stackDefs.map((stack) => stack.value);
@@ -447,6 +508,13 @@ export default {
                 : this.content.lanedByLabel && laneItems[0]
                 ? wwLib.resolveObjectPropertyPath(laneItems[0], this.content.lanedByLabel) ?? String(laneValue)
                 : String(laneValue);
+            // Unfiltered per-column cells for this lane, then narrowed down to exactly the
+            // board-wide visible columns (this.internalStacks) - never independently, or this
+            // lane's columns would drift out of alignment with every other lane's row again.
+            const boardStackValues = this.internalStacks.map((stack) => stack.value);
+            const stacks = this.buildStackCells(laneItems, false).filter((cell) => boardStackValues.includes(cell.value));
+            const uncategorizedStack = this.buildUncategorizedStack(laneItems);
+            const columns = this.showUncategorizedStackColumn ? [uncategorizedStack].concat(stacks) : stacks;
             return {
                 label,
                 value: isUncategorized ? null : laneValue,
@@ -455,8 +523,9 @@ export default {
                 limit: limit > 0 ? limit : null,
                 isOverLimit: limit > 0 && count >= limit,
                 items: laneItems,
-                stacks: this.buildStacks(laneItems),
-                uncategorizedStack: this.buildUncategorizedStack(laneItems),
+                stacks,
+                uncategorizedStack,
+                columns,
             };
         },
         isStackCollapsed(stackValue) {
@@ -522,35 +591,14 @@ export default {
     flex-wrap: var(--wrap-stacks);
 
     &.ww-kanban--swimlanes {
-        flex-direction: column;
-        flex-wrap: nowrap;
+        display: grid;
+        align-items: start;
     }
 }
 
-.ww-kanban-lane {
-    display: flex;
-    flex-direction: column;
-}
-
-.ww-kanban-lane-body {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: var(--wrap-stacks);
-}
-
-/*
- * Every lane renders its own ww-stack cell per stack, each with its own headerElement/
- * footerElement - but that content is identical across lanes for a given stack (same label,
- * same bound design), so showing it once per lane is pure duplication. Only the first visible
- * lane's header/footer stays on screen; the rest are hidden with display:none (not removed -
- * the stack's collapse control still lives inside that first header, and collapsing it now
- * applies to every lane's cell for that stack at once, see customCollapseHandler).
- */
-.ww-kanban--swimlanes .ww-kanban-lane:not(:first-child) {
-    :deep(.ww-stack-header),
-    :deep(.ww-stack-footer) {
-        display: none;
-    }
+.ww-kanban-lane-header,
+.ww-kanban-lane-footer {
+    grid-column: 1 / -1;
 }
 
 .ww-kanban--sticky-stack-header :deep(.ww-stack-header) {

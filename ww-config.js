@@ -297,6 +297,10 @@ export default {
             defaultValue: true,
             bindable: true,
             section: "settings",
+            propertyHelp: {
+                tooltip:
+                    "A stack is hidden only if it has no items anywhere on the board. With swimlanes on, this is board-wide, not per lane - every lane always shows the same set of columns, so they stay aligned under the same shared header.",
+            },
         },
         hideEmptyLanes: {
             hidden: (content) => !content.swimlanesEnabled,
