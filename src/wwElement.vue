@@ -406,12 +406,20 @@ export default {
             // Baked directly into the column-template string per column (same technique as
             // kanvana's swimlane board), rather than left to per-cell state styling: a collapsed
             // column needs the GRID TRACK itself to narrow, not just its visible content, or the
-            // column would still reserve full width and leave a gap. Expanded columns stay
-            // content-sized (minmax(0, auto)) so whatever width each stack has via the style
-            // panel keeps working instead of being forced into an equal split.
+            // column would still reserve full width and leave a gap.
+            //
+            // Expanded columns use minmax(stackMinWidth, 1fr), not minmax(0, auto) - a 0 minimum
+            // gives the grid permission to shrink tracks all the way down to fit the available
+            // width instead of overflowing, which is what squeezed every column into a cramped
+            // sliver with items bleeding across column boundaries. A real minimum means the board
+            // overflows and scrolls horizontally once columns don't fit, matching how the
+            // original flex-based layout behaved with wrapStacks off.
             const collapsedWidth = this.content.collapsedStackWidth > 0 ? this.content.collapsedStackWidth : 60;
+            const minWidth = this.content.stackMinWidth > 0 ? this.content.stackMinWidth : 240;
             return this.boardColumns
-                .map((column) => (this.isStackCollapsed(column.value) ? `${collapsedWidth}px` : "minmax(0, auto)"))
+                .map((column) =>
+                    this.isStackCollapsed(column.value) ? `${collapsedWidth}px` : `minmax(${minWidth}px, 1fr)`
+                )
                 .join(" ");
         },
         isReadonly() {
@@ -632,6 +640,10 @@ export default {
     flex-direction: column;
     flex: 1 1 auto;
     min-width: 0;
+    // All rows (chrome header, every lane, chrome footer) live inside this single scrolling
+    // container, so scrolling right moves them together in lockstep - columns stay aligned
+    // instead of each row scrolling independently.
+    overflow-x: auto;
 }
 
 .ww-kanban-grid-row {

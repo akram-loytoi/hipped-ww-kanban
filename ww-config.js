@@ -29,7 +29,7 @@ export default {
             ["swimlanesEnabled", "lanedBy", "lanedByLabel"],
             ["laneSortedBy", "laneSortedByField", "laneSortOrder"],
             ["stickyStackHeader", "stickyStackFooter"],
-            ["collapsedStackWidth"],
+            ["stackMinWidth", "collapsedStackWidth"],
             "readonly",
             "draggingCursor",
             "customDragHandle",
@@ -374,6 +374,30 @@ export default {
             propertyHelp: {
                 tooltip: "Pins each stack's footer to the bottom of its nearest scrolling container.",
             },
+        },
+        stackMinWidth: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Stack min width",
+            },
+            type: "Number",
+            section: "settings",
+            bindable: true,
+            defaultValue: 240,
+            options: {
+                min: 0,
+                unit: "px",
+            },
+            propertyHelp: {
+                tooltip:
+                    "Minimum width, in pixels, of an expanded stack's column. Only applies with swimlanes on - the board overflows and scrolls horizontally once columns can't fit at this width, rather than squeezing them narrower.",
+            },
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "number",
+                tooltip: "A number of pixels for the minimum expanded column width.",
+            },
+            /* wwEditor:end */
         },
         collapsedStackWidth: {
             hidden: (content) => !content.swimlanesEnabled,
