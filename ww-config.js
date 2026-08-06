@@ -31,6 +31,7 @@ export default {
             ["laneHeaderWidth", "laneHeaderCollapsedWidth", "stickyLaneHeader"],
             ["stickyStackHeader", "stickyStackFooter"],
             ["stackMinWidth", "collapsedStackWidth"],
+            ["initialCollapsedStacks"],
             "readonly",
             "draggingCursor",
             "customDragHandle",
@@ -497,6 +498,34 @@ export default {
             bindingValidation: {
                 type: "number",
                 tooltip: "A number of pixels for the collapsed column width.",
+            },
+            /* wwEditor:end */
+        },
+        initialCollapsedStacks: {
+            label: {
+                en: "Initially collapsed stacks",
+            },
+            type: "Array",
+            section: "settings",
+            bindable: true,
+            defaultValue: [],
+            options: {
+                expandable: true,
+                getItemLabel(item) {
+                    return String(item);
+                },
+                item: {
+                    type: "Text",
+                },
+            },
+            propertyHelp: {
+                tooltip:
+                    "Stack values (matching each stack's Value field) that should start collapsed when the board first loads. Bind this to compute it dynamically - e.g. always start \"Done\" collapsed. Sets the initial state only; toggling collapse afterwards isn't overridden by later changes to this value.",
+            },
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "array",
+                tooltip: "An array of stack values that should start collapsed.",
             },
             /* wwEditor:end */
         },

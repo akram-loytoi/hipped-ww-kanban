@@ -232,7 +232,15 @@ export default {
         // ever rendered once, in the dedicated chrome row (see boardColumns/template), so it's
         // the only click target available, and collapsing it collapses that column in every lane
         // at once rather than each lane's cell independently.
+        //
+        // Seeded once from initialCollapsedStacks, not kept in sync with it afterwards - it's an
+        // initial value (same "initial", not "controlled", semantics as ww-stack's own `collapsed`
+        // content prop), not a live-bound source of truth, so a later change to the bound array
+        // doesn't fight the user's own manual toggles during the session.
         const collapsedStacks = reactive({});
+        for (const value of Array.isArray(props.content.initialCollapsedStacks) ? props.content.initialCollapsedStacks : []) {
+            collapsedStacks[value ?? ""] = true;
+        }
         provide("customCollapseHandler", ({ stack }) => {
             const key = stack ?? "";
             collapsedStacks[key] = !collapsedStacks[key];
