@@ -57,12 +57,7 @@
             which only permits flex/inline-flex there) - overriding it from this component's own
             CSS would fight the style panel rather than cooperate with it.
         -->
-        <div
-            v-else
-            class="ww-kanban-grid"
-            :class="{ 'ww-kanban-grid--sticky-lane-header': content.stickyLaneHeader }"
-            :style="{ '--kanban-grid-template': gridTemplate }"
-        >
+        <div v-else class="ww-kanban-grid" :style="{ '--kanban-grid-template': gridTemplate }">
             <div
                 class="ww-kanban-chrome-row"
                 :class="{ 'ww-kanban-chrome-row--sticky-top': content.stickyStackHeader }"
@@ -113,6 +108,7 @@
                         lane: lane.value,
                         isDragging: isDragging,
                         collapsedStacks: collapsedStacks,
+                        stickyHeader: content.stickyLaneHeader,
                     }"
                     class="ww-kanban-lane"
                 ></wwElement>
@@ -651,6 +647,11 @@ export default {
 .ww-kanban {
     flex-direction: row;
     flex-wrap: var(--wrap-stacks);
+    // Lets a constrained height set via the style panel actually reach .ww-kanban-grid below
+    // instead of being ignored - a flex item won't shrink below its content's natural height
+    // without this, regardless of the parent's own height, which is why a set height wasn't
+    // producing an actual internal scroll container for sticky to work against.
+    min-height: 0;
 }
 
 /*
@@ -671,6 +672,7 @@ export default {
     flex-direction: column;
     flex: 1 1 auto;
     min-width: 0;
+    min-height: 0;
     // All rows (chrome header, every lane, chrome footer) live inside this single scrolling
     // container, so scrolling right moves them together in lockstep - columns stay aligned
     // instead of each row scrolling independently.
@@ -696,15 +698,5 @@ export default {
     position: sticky;
     bottom: 0;
     z-index: 2;
-}
-
-// Reaches into every hipped-ww-lane instance's own header slot - :deep() penetrates DOM
-// descendants regardless of the component boundary, unlike stickyStackHeader/Footer above which
-// just stick the whole chrome row (there's no per-instance header to individually target there,
-// it's a single shared row).
-.ww-kanban-grid--sticky-lane-header :deep(.ww-lane-header) {
-    position: sticky;
-    left: 0;
-    z-index: 3;
 }
 </style>
