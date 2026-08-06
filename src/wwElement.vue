@@ -91,47 +91,59 @@
                 </wwLayoutItemContext>
             </div>
 
-            <div
-                v-for="(lane, laneIndex) in visibleLanes"
-                :key="'ww-lane-' + laneIndex"
-                class="ww-kanban-grid-row ww-kanban-lane"
-            >
+            <!--
+                laneElement gives the row itself something stylable - background, border, the
+                works - the way stackElement already does for a column. It can't literally
+                CONTAIN the stack cells below (a nested element reference like this renders
+                whatever the referenced component defines internally, same reason stackElement
+                doesn't "contain" anything ww-kanban injects either), so it's a background layer:
+                absolutely positioned to fill the row, sitting behind the real header/cells via
+                z-index, with pointer-events disabled so it never intercepts drags meant for the
+                interactive content on top of it.
+            -->
+            <div v-for="(lane, laneIndex) in visibleLanes" :key="'ww-lane-' + laneIndex" class="ww-kanban-lane-wrapper">
                 <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
-                    <wwLayout
-                        path="laneHeaderElement"
-                        class="ww-kanban-lane-header"
-                        :class="{
-                            'ww-kanban-lane-header--collapsed': laneHeaderCollapsed,
-                            'ww-kanban-lane-header--sticky': content.stickyLaneHeader,
-                        }"
-                    ></wwLayout>
+                    <wwElement v-bind="content.laneElement" class="ww-kanban-lane-background"></wwElement>
                 </wwLayoutItemContext>
 
-                <wwLayoutItemContext
-                    v-for="(column, columnIndex) in lane.columns"
-                    :key="'ww-stack-' + laneIndex + '-' + columnIndex"
-                    :index="columnIndex"
-                    :item="null"
-                    is-repeat
-                    :data="column"
-                    :repeated-items="lane.columns"
-                >
-                    <wwElement
-                        v-bind="content.stackElement"
-                        :ww-props="{
-                            ...stackConfig,
-                            items: column.items,
-                            stack: column.value,
-                            lane: lane.value,
-                            collapsed: isStackCollapsed(column.value),
-                            hideHeader: true,
-                            hideFooter: true,
-                        }"
-                        class="ww-kanban-stack"
-                        :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
-                        :states="isDragging ? ['dragging'] : []"
-                    ></wwElement>
-                </wwLayoutItemContext>
+                <div class="ww-kanban-grid-row ww-kanban-lane">
+                    <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
+                        <wwLayout
+                            path="laneHeaderElement"
+                            class="ww-kanban-lane-header"
+                            :class="{
+                                'ww-kanban-lane-header--collapsed': laneHeaderCollapsed,
+                                'ww-kanban-lane-header--sticky': content.stickyLaneHeader,
+                            }"
+                        ></wwLayout>
+                    </wwLayoutItemContext>
+
+                    <wwLayoutItemContext
+                        v-for="(column, columnIndex) in lane.columns"
+                        :key="'ww-stack-' + laneIndex + '-' + columnIndex"
+                        :index="columnIndex"
+                        :item="null"
+                        is-repeat
+                        :data="column"
+                        :repeated-items="lane.columns"
+                    >
+                        <wwElement
+                            v-bind="content.stackElement"
+                            :ww-props="{
+                                ...stackConfig,
+                                items: column.items,
+                                stack: column.value,
+                                lane: lane.value,
+                                collapsed: isStackCollapsed(column.value),
+                                hideHeader: true,
+                                hideFooter: true,
+                            }"
+                            class="ww-kanban-stack"
+                            :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
+                            :states="isDragging ? ['dragging'] : []"
+                        ></wwElement>
+                    </wwLayoutItemContext>
+                </div>
             </div>
 
             <div
@@ -714,5 +726,21 @@ export default {
     position: sticky;
     left: 0;
     z-index: 3;
+}
+
+.ww-kanban-lane-wrapper {
+    position: relative;
+}
+
+.ww-kanban-lane-background {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.ww-kanban-grid-row.ww-kanban-lane {
+    position: relative;
+    z-index: 1;
 }
 </style>

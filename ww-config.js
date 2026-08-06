@@ -76,9 +76,19 @@ export default {
                 type: "e56264df-fcab-44c4-a422-adf173f0d745",
             },
         },
+        laneElement: {
+            hidden: true,
+            // A plain stock container, not a coded component - it only ever needs to be
+            // stylable (background/border/padding for the whole row), never anything
+            // functional, so there's no reason to fork a dedicated element for it.
+            defaultValue: {
+                isWwObject: true,
+                type: "ww-flexbox",
+            },
+        },
         laneHeaderElement: {
             hidden: true,
-            defaultValue: [{ isWwObject: true, type: "ww-text" }],
+            defaultValue: [{ isWwObject: true, type: "ww-flexbox" }],
             navigator: {
                 group: "Lane header",
             },
