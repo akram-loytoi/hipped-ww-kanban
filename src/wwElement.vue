@@ -233,14 +233,28 @@ export default {
         // the only click target available, and collapsing it collapses that column in every lane
         // at once rather than each lane's cell independently.
         //
-        // Seeded once from initialCollapsedStacks, not kept in sync with it afterwards - it's an
-        // initial value (same "initial", not "controlled", semantics as ww-stack's own `collapsed`
-        // content prop), not a live-bound source of truth, so a later change to the bound array
-        // doesn't fight the user's own manual toggles during the session.
+        // Seeded from initialCollapsedStacks via a watcher, not a one-time read: a plain
+        // synchronous read of props.content.initialCollapsedStacks during setup() can capture an
+        // unresolved value if the binding is a formula that itself depends on something not yet
+        // available (e.g. computed off items.length before items has loaded) - the prop resolves
+        // correctly moments later, but a one-time read has already missed it by then. The watcher
+        // re-fires as the bound value changes and stops itself the first time it sees a genuinely
+        // non-empty array, so it still only acts as an INITIAL seed (same "initial, not
+        // controlled" semantics as ww-stack's own `collapsed` content prop) rather than staying
+        // live-bound and fighting the user's own manual toggles later.
         const collapsedStacks = reactive({});
-        for (const value of Array.isArray(props.content.initialCollapsedStacks) ? props.content.initialCollapsedStacks : []) {
-            collapsedStacks[value ?? ""] = true;
-        }
+        let stopInitialCollapseWatch;
+        stopInitialCollapseWatch = watch(
+            () => props.content.initialCollapsedStacks,
+            (value) => {
+                if (!Array.isArray(value) || !value.length) return;
+                for (const stackValue of value) {
+                    collapsedStacks[stackValue ?? ""] = true;
+                }
+                stopInitialCollapseWatch && stopInitialCollapseWatch();
+            },
+            { immediate: true }
+        );
         provide("customCollapseHandler", ({ stack }) => {
             const key = stack ?? "";
             collapsedStacks[key] = !collapsedStacks[key];
