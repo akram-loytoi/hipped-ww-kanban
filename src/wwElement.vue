@@ -67,7 +67,7 @@
                 class="ww-kanban-chrome-row"
                 :class="{ 'ww-kanban-chrome-row--sticky-top': content.stickyStackHeader }"
             >
-                <div class="ww-kanban-lane-edge"></div>
+                <wwLayout path="laneColumnHeaderElement" class="ww-kanban-lane-edge"></wwLayout>
 
                 <wwLayoutItemContext
                     v-for="(column, columnIndex) in boardColumns"

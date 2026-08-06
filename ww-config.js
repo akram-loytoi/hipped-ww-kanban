@@ -88,6 +88,17 @@ export default {
                 type: "f5cb5cc2-0d77-42b4-8315-0a8510570ae3",
             },
         },
+        laneColumnHeaderElement: {
+            hidden: true,
+            // Sits above the lane-header column, in the same chrome row as the stack headers
+            // ("Todo", "In progress"...) - a label for what the lane grouping itself represents
+            // (e.g. "Job opening"), shown once for the whole board like the stack headers are,
+            // not per lane. No footer equivalent - lane footers were dropped as not useful.
+            defaultValue: [{ isWwObject: true, type: "ww-flexbox" }],
+            navigator: {
+                group: "Lane column header",
+            },
+        },
         wrapStacks: {
             label: {
                 en: "Wrap stacks",
