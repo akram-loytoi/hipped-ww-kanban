@@ -26,6 +26,8 @@ export default {
         customSettingsPropertiesOrder: [
             "items",
             ["itemKey", "stackedBy", "sortedBy", "sortOrder"],
+            ["swimlanesEnabled", "lanedBy"],
+            ["laneSortedBy", "laneSortedByField", "laneSortOrder"],
             "readonly",
             "draggingCursor",
             "customDragHandle",
@@ -44,6 +46,10 @@ export default {
                 item: {},
                 from: "",
                 to: "",
+                fromStack: "",
+                toStack: "",
+                fromLane: "",
+                toLane: "",
                 oldIndex: 0,
                 newIndex: 1,
                 updatedList: [],
@@ -55,10 +61,24 @@ export default {
     properties: {
         stackElement: {
             hidden: true,
-            //ww-stack
+            //hipped-ww-stack
             defaultValue: {
                 isWwObject: true,
-                type: "5a88036f-22ea-4f8d-b4a5-bc226ef95061",
+                type: "e56264df-fcab-44c4-a422-adf173f0d745",
+            },
+        },
+        laneHeaderElement: {
+            hidden: true,
+            defaultValue: [{ isWwObject: true, type: "ww-text" }],
+            navigator: {
+                group: "Lane header",
+            },
+        },
+        laneFooterElement: {
+            hidden: true,
+            defaultValue: [],
+            navigator: {
+                group: "Lane footer",
             },
         },
         wrapStacks: {
@@ -158,6 +178,156 @@ export default {
             type: "OnOff",
             defaultValue: false,
             section: "settings",
+        },
+        swimlanesEnabled: {
+            label: {
+                en: "Swimlanes",
+            },
+            type: "OnOff",
+            section: "settings",
+            bindable: true,
+            defaultValue: false,
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "boolean",
+                tooltip: "A boolean that groups stacks into horizontal swimlanes: `true | false`",
+            },
+            /* wwEditor:end */
+        },
+        lanedBy: {
+            hidden: (content, sidepanelContent, boundProps) =>
+                !content.swimlanesEnabled || !showObjectPropertyPath("items", { content, boundProps }),
+            label: {
+                en: "Laned by",
+            },
+            type: "ObjectPropertyPath",
+            options: (content) => getObjectPropertyPathOptions("items", { content }),
+            defaultValue: null,
+            section: "settings",
+        },
+        laneSortedBy: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Lanes sorted by",
+            },
+            type: "TextSelect",
+            options: {
+                options: [
+                    { value: "label", label: "Label (A-Z)", default: true },
+                    { value: "count", label: "Item count" },
+                    { value: "field", label: "Bound field" },
+                ],
+            },
+            defaultValue: "label",
+            bindable: true,
+            section: "settings",
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "string",
+                tooltip: "Valid values: label | count | field",
+            },
+            /* wwEditor:end */
+        },
+        laneSortedByField: {
+            hidden: (content, sidepanelContent, boundProps) =>
+                !content.swimlanesEnabled ||
+                content.laneSortedBy !== "field" ||
+                !showObjectPropertyPath("items", { content, boundProps }),
+            label: {
+                en: "Lane sort field",
+            },
+            type: "ObjectPropertyPath",
+            options: (content) => getObjectPropertyPathOptions("items", { content }),
+            defaultValue: null,
+            section: "settings",
+        },
+        laneSortOrder: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Lane sort order",
+            },
+            type: "TextRadioGroup",
+            options: {
+                choices: [
+                    {
+                        label: { en: "Asc" },
+                        value: "asc",
+                        default: true,
+                    },
+                    {
+                        label: { en: "Desc" },
+                        value: "desc",
+                    },
+                ],
+            },
+            defaultValue: "asc",
+            bindable: true,
+            section: "settings",
+        },
+        uncategorizedLane: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Uncategorized lane",
+            },
+            type: "OnOff",
+            defaultValue: false,
+            section: "settings",
+        },
+        hideEmptyStacks: {
+            label: {
+                en: "Hide empty stacks",
+            },
+            type: "OnOff",
+            defaultValue: true,
+            bindable: true,
+            section: "settings",
+        },
+        hideEmptyLanes: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Hide empty lanes",
+            },
+            type: "OnOff",
+            defaultValue: true,
+            bindable: true,
+            section: "settings",
+        },
+        stackWipLimit: {
+            label: {
+                en: "Max items per stack",
+            },
+            type: "Number",
+            section: "settings",
+            bindable: true,
+            defaultValue: null,
+            options: {
+                min: 0,
+            },
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "number",
+                tooltip: "A number setting the WIP limit per stack. Leave unset / 0 for no limit.",
+            },
+            /* wwEditor:end */
+        },
+        laneWipLimit: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Max items per lane",
+            },
+            type: "Number",
+            section: "settings",
+            bindable: true,
+            defaultValue: null,
+            options: {
+                min: 0,
+            },
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "number",
+                tooltip: "A number setting the WIP limit per lane. Leave unset / 0 for no limit.",
+            },
+            /* wwEditor:end */
         },
         stacks: {
             label: {
