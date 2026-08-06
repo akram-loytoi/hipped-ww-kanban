@@ -28,6 +28,7 @@ export default {
             ["itemKey", "stackedBy", "sortedBy", "sortOrder"],
             ["swimlanesEnabled", "lanedBy", "lanedByLabel"],
             ["laneSortedBy", "laneSortedByField", "laneSortOrder"],
+            ["laneHeaderWidth", "laneHeaderCollapsedWidth", "stickyLaneHeader"],
             ["stickyStackHeader", "stickyStackFooter"],
             ["stackMinWidth", "collapsedStackWidth"],
             "readonly",
@@ -40,6 +41,12 @@ export default {
     options: {
         displayAllowedValues: ["flex", "inline-flex"],
     },
+    actions: [
+        {
+            label: { en: "Toggle lane header" },
+            action: "toggleLaneHeaderCollapsed",
+        },
+    ],
     triggerEvents: [
         {
             name: "item:moved",
@@ -74,13 +81,6 @@ export default {
             defaultValue: [{ isWwObject: true, type: "ww-text" }],
             navigator: {
                 group: "Lane header",
-            },
-        },
-        laneFooterElement: {
-            hidden: true,
-            defaultValue: [],
-            navigator: {
-                group: "Lane footer",
             },
         },
         wrapStacks: {
@@ -220,6 +220,67 @@ export default {
             propertyHelp: {
                 tooltip:
                     "Optional. Field to display as the lane's label, if different from the field used to group by (Laned by). Resolved from the first item in each lane. Leave unset to just show the raw \"Laned by\" value.",
+            },
+        },
+        laneHeaderWidth: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Lane header width",
+            },
+            type: "Number",
+            section: "settings",
+            bindable: true,
+            defaultValue: 160,
+            options: {
+                min: 0,
+                unit: "px",
+            },
+            propertyHelp: {
+                tooltip:
+                    "Width, in pixels, of the lane-header column - a single board-wide column, same as a stack's own column, not sized to its content. Every row (the stack header row and every lane) needs to size this column identically, or content bleeds into the first stack column.",
+            },
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "number",
+                tooltip: "A number of pixels for the lane-header column width.",
+            },
+            /* wwEditor:end */
+        },
+        laneHeaderCollapsedWidth: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Lane header collapsed width",
+            },
+            type: "Number",
+            section: "settings",
+            bindable: true,
+            defaultValue: 48,
+            options: {
+                min: 0,
+                unit: "px",
+            },
+            propertyHelp: {
+                tooltip:
+                    "Width, in pixels, the lane-header column shrinks to when collapsed via the \"Toggle lane header\" action.",
+            },
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "number",
+                tooltip: "A number of pixels for the collapsed lane-header column width.",
+            },
+            /* wwEditor:end */
+        },
+        stickyLaneHeader: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Sticky lane header",
+            },
+            type: "OnOff",
+            section: "settings",
+            bindable: true,
+            defaultValue: true,
+            propertyHelp: {
+                tooltip: "Pins the lane-header column to the left edge while scrolling horizontally through stack columns.",
             },
         },
         laneSortedBy: {

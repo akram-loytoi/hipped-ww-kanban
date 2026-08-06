@@ -31,21 +31,27 @@
         </template>
 
         <!--
-            A lane is a row, so its header/footer sit at the horizontal start/end of that row -
-            the first and last tracks of the grid - not as bars above/below it. Every grid row
-            (chrome header, each lane, chrome footer) is therefore boardColumns.length + 2 cells
-            wide: a leading edge cell, one cell per stack column, a trailing edge cell. The chrome
-            rows have nothing lane-specific to show, so their edge cells are just empty spacers -
-            they still have to exist, though, or the stack columns after them would land one track
-            over from where every lane's stack columns land.
+            A lane is a row, so its header sits at the horizontal start of that row - the first
+            track of the grid - not as a bar above it. Every grid row (chrome header, each lane,
+            chrome footer) is therefore boardColumns.length + 1 cells wide: a leading lane-header
+            cell, then one cell per stack column. The chrome rows have no lane to label, so their
+            leading cell is just an empty spacer sized to the same track - it still has to exist,
+            though, or the stack columns after it would land one track over from where every
+            lane's stack columns land.
 
-            Column alignment comes from a single CSS custom property (--kanban-grid-template) set
-            once on .ww-kanban-grid: every independent grid row below inherits that same value, so
-            they line up regardless of what wrapper markup sits between them. boardColumns is the
-            one fixed, board-wide column list every row iterates, so a column always exists in the
-            same position regardless of which lanes are empty for it. Collapsed width is baked
-            directly into the template string per column (see gridTemplate), so the column itself
-            actually narrows rather than just its visible content.
+            The lane-header column is deliberately NOT intrinsically sized (min-content/max-
+            content): it's an explicit, board-wide column with its own configurable width
+            (laneHeaderWidth/laneHeaderCollapsedWidth), the same "real number, not content-
+            dependent sizing" principle as the stack columns - intrinsic sizing on a track that
+            multiple independent grids (chrome row + every lane row) all need to size identically
+            is exactly what let content bleed into the next column over.
+
+            Column alignment overall comes from a single CSS custom property
+            (--kanban-grid-template) set once on .ww-kanban-grid: every independent grid row below
+            inherits that same value, so they line up regardless of what wrapper markup sits
+            between them. boardColumns is the one fixed, board-wide column list every row
+            iterates, so a stack column always exists in the same position regardless of which
+            lanes are empty for it.
 
             display:grid lives on this inner div rather than on .ww-kanban itself: the root's
             `display` is WeWeb-style-panel territory (see displayAllowedValues in ww-config.js,
@@ -83,8 +89,6 @@
                         :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
                     ></wwElement>
                 </wwLayoutItemContext>
-
-                <div class="ww-kanban-lane-edge"></div>
             </div>
 
             <div
@@ -93,7 +97,14 @@
                 class="ww-kanban-grid-row ww-kanban-lane"
             >
                 <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
-                    <wwLayout path="laneHeaderElement" class="ww-kanban-lane-header"></wwLayout>
+                    <wwLayout
+                        path="laneHeaderElement"
+                        class="ww-kanban-lane-header"
+                        :class="{
+                            'ww-kanban-lane-header--collapsed': laneHeaderCollapsed,
+                            'ww-kanban-lane-header--sticky': content.stickyLaneHeader,
+                        }"
+                    ></wwLayout>
                 </wwLayoutItemContext>
 
                 <wwLayoutItemContext
@@ -120,10 +131,6 @@
                         :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
                         :states="isDragging ? ['dragging'] : []"
                     ></wwElement>
-                </wwLayoutItemContext>
-
-                <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
-                    <wwLayout path="laneFooterElement" class="ww-kanban-lane-footer"></wwLayout>
                 </wwLayoutItemContext>
             </div>
 
@@ -157,8 +164,6 @@
                         :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
                     ></wwElement>
                 </wwLayoutItemContext>
-
-                <div class="ww-kanban-lane-edge"></div>
             </div>
         </div>
     </div>
@@ -245,6 +250,16 @@ export default {
             collapsedStacks[key] = !collapsedStacks[key];
         });
 
+        // One shared toggle for the whole board, not per-lane: the lane-header column is a
+        // single board-wide column (like a stack column), so there's only ever one collapsed
+        // state for it, not one per lane.
+        const { value: laneHeaderCollapsed, setValue: setLaneHeaderCollapsed } = wwLib.wwVariable.useComponentVariable({
+            uid: props.uid,
+            name: "laneHeaderCollapsed",
+            type: "boolean",
+            defaultValue: false,
+        });
+
         const { setValue: setDrag } = wwLib.wwVariable.useComponentVariable({
             uid: props.uid,
             name: "isDragging",
@@ -278,7 +293,7 @@ export default {
             { deep: true }
         );
 
-        return { isDragging, collapsedStacks };
+        return { isDragging, collapsedStacks, laneHeaderCollapsed, setLaneHeaderCollapsed };
     },
     computed: {
         stacks() {
@@ -436,12 +451,19 @@ export default {
                     this.isStackCollapsed(column.value) ? `${collapsedWidth}px` : `minmax(${minWidth}px, 1fr)`
                 )
                 .join(" ");
-            // Leading/trailing tracks hold the lane header/footer content - sized to whatever
-            // that content needs (min-content) but never allowed to shrink below it, the same
-            // "real floor, not zero" principle as the stack tracks above, just content-driven
-            // instead of a configurable number since this is Akram's own designed content, not
-            // arbitrary card data that could run arbitrarily wide.
-            return `minmax(min-content, max-content) ${stackTracks} minmax(min-content, max-content)`;
+            // Leading track holds the lane header - an explicit width, same principle as the
+            // stack tracks above, not intrinsic (min-content/max-content) sizing. Several
+            // independent grids (the chrome row's empty spacer + every lane's actual header
+            // content) all need to size this track identically; leaving that to each row's own
+            // content is what let the header bleed into the first stack column.
+            const laneHeaderWidth = this.laneHeaderCollapsed
+                ? this.content.laneHeaderCollapsedWidth > 0
+                    ? this.content.laneHeaderCollapsedWidth
+                    : 48
+                : this.content.laneHeaderWidth > 0
+                ? this.content.laneHeaderWidth
+                : 160;
+            return `${laneHeaderWidth}px ${stackTracks}`;
         },
         isReadonly() {
             /* wwEditor:start */
@@ -584,6 +606,9 @@ export default {
         isStackCollapsed(stackValue) {
             return !!this.collapsedStacks[stackValue ?? ""];
         },
+        toggleLaneHeaderCollapsed() {
+            this.setLaneHeaderCollapsed(!this.laneHeaderCollapsed);
+        },
         compareItems(a, b) {
             if (!this.content.sortedBy) return 0;
             const valueA = wwLib.resolveObjectPropertyPath(a, this.content.sortedBy);
@@ -685,21 +710,9 @@ export default {
     z-index: 2;
 }
 
-/*
- * A lane's header/footer sit at the horizontal start/end of its row, so they need to stay
- * pinned there horizontally too - a "row label" that scrolls away the moment you scroll right
- * to see later stack columns defeats its own purpose. Unlike stickyStackHeader/Footer this isn't
- * an opt-in toggle: it's the point of putting the content here rather than above/below the row.
- */
-.ww-kanban-lane-header {
+.ww-kanban-lane-header--sticky {
     position: sticky;
     left: 0;
-    z-index: 3;
-}
-
-.ww-kanban-lane-footer {
-    position: sticky;
-    right: 0;
     z-index: 3;
 }
 </style>
