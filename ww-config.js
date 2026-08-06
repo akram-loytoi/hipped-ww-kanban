@@ -29,6 +29,7 @@ export default {
             ["swimlanesEnabled", "lanedBy", "lanedByLabel"],
             ["laneSortedBy", "laneSortedByField", "laneSortOrder"],
             ["stickyStackHeader", "stickyStackFooter"],
+            ["collapsedStackWidth"],
             "readonly",
             "draggingCursor",
             "customDragHandle",
@@ -373,6 +374,30 @@ export default {
             propertyHelp: {
                 tooltip: "Pins each stack's footer to the bottom of its nearest scrolling container.",
             },
+        },
+        collapsedStackWidth: {
+            hidden: (content) => !content.swimlanesEnabled,
+            label: {
+                en: "Collapsed stack width",
+            },
+            type: "Number",
+            section: "settings",
+            bindable: true,
+            defaultValue: 60,
+            options: {
+                min: 0,
+                unit: "px",
+            },
+            propertyHelp: {
+                tooltip:
+                    "Width, in pixels, a stack's column shrinks to when collapsed. Only applies with swimlanes on - the column's own grid track needs to narrow, not just its content, or the column keeps its full width with an empty gap.",
+            },
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "number",
+                tooltip: "A number of pixels for the collapsed column width.",
+            },
+            /* wwEditor:end */
         },
         stacks: {
             label: {

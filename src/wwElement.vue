@@ -31,59 +31,68 @@
         </template>
 
         <!--
-            Swimlanes are a real grid, not lanes nesting stacks or the other way round: every
-            cell below (chrome header row, each lane's cells, chrome footer row) is a direct
-            child of .ww-kanban-grid and relies on CSS Grid auto-flow to land in the right row,
-            with only the lane header/footer explicitly spanning all columns. boardColumns is the
-            one fixed, board-wide column list every row iterates - so a column always lines up
-            under the same header regardless of which lanes are empty for it.
+            Each lane is a genuine, self-contained row again (header, its own cell grid, footer) -
+            not flattened into one giant auto-flow grid. Column alignment instead comes from a
+            single CSS custom property (--kanban-grid-template) set once on .ww-kanban-grid: every
+            independent grid below (the chrome header row, each lane's own cell grid, the chrome
+            footer row) inherits that same value, so they line up under one shared header no
+            matter what wrapper markup sits between them. boardColumns is the one fixed, board-
+            wide column list every row iterates, so a column always exists in the same position
+            regardless of which lanes are empty for it. Collapsed width is baked directly into
+            the template string per column (see gridTemplate), not left to per-cell styling, so
+            the column itself actually narrows rather than just its visible content.
 
-            This is a separate inner div rather than putting display:grid on .ww-kanban itself:
-            the root's `display` is WeWeb-style-panel territory (see displayAllowedValues in
-            ww-config.js, which only permits flex/inline-flex there) - overriding it from this
-            component's own CSS would fight the style panel rather than cooperate with it.
+            display:grid lives on this inner div rather than on .ww-kanban itself: the root's
+            `display` is WeWeb-style-panel territory (see displayAllowedValues in ww-config.js,
+            which only permits flex/inline-flex there) - overriding it from this component's own
+            CSS would fight the style panel rather than cooperate with it.
         -->
-        <div
-            v-else
-            class="ww-kanban-grid"
-            :class="{
-                'ww-kanban-grid--sticky-stack-header': content.stickyStackHeader,
-                'ww-kanban-grid--sticky-stack-footer': content.stickyStackFooter,
-            }"
-            :style="gridStyle"
-        >
-            <wwLayoutItemContext
-                v-for="(column, columnIndex) in boardColumns"
-                :key="'ww-stack-chrome-header-' + columnIndex"
-                :index="columnIndex"
-                :item="null"
-                is-repeat
-                :data="column"
-                :repeated-items="boardColumns"
+        <div v-else class="ww-kanban-grid" :style="{ '--kanban-grid-template': gridTemplate }">
+            <div
+                class="ww-kanban-grid-row"
+                :class="{ 'ww-kanban-grid-row--sticky-top': content.stickyStackHeader }"
             >
-                <wwElement
-                    v-bind="content.stackElement"
-                    :ww-props="{
-                        ...stackConfig,
-                        items: [],
-                        stack: column.value,
-                        collapsed: isStackCollapsed(column.value),
-                        hideFooter: true,
-                        group: chromeGroup,
-                        sortable: false,
-                    }"
-                    class="ww-kanban-stack ww-kanban-stack--chrome"
-                    :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
-                ></wwElement>
-            </wwLayoutItemContext>
+                <wwLayoutItemContext
+                    v-for="(column, columnIndex) in boardColumns"
+                    :key="'ww-stack-chrome-header-' + columnIndex"
+                    :index="columnIndex"
+                    :item="null"
+                    is-repeat
+                    :data="column"
+                    :repeated-items="boardColumns"
+                >
+                    <wwElement
+                        v-bind="content.stackElement"
+                        :ww-props="{
+                            ...stackConfig,
+                            items: [],
+                            stack: column.value,
+                            collapsed: isStackCollapsed(column.value),
+                            hideFooter: true,
+                            group: chromeGroup,
+                            sortable: false,
+                        }"
+                        class="ww-kanban-stack ww-kanban-stack--chrome"
+                        :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
+                    ></wwElement>
+                </wwLayoutItemContext>
+            </div>
 
-            <template v-for="(lane, laneIndex) in visibleLanes" :key="'ww-lane-' + laneIndex">
+            <div v-for="(lane, laneIndex) in visibleLanes" :key="'ww-lane-' + laneIndex" class="ww-kanban-lane">
                 <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
                     <wwLayout path="laneHeaderElement" class="ww-kanban-lane-header"></wwLayout>
                 </wwLayoutItemContext>
 
-                <template v-for="(column, columnIndex) in lane.columns" :key="'ww-stack-' + laneIndex + '-' + columnIndex">
-                    <wwLayoutItemContext :index="columnIndex" :item="null" is-repeat :data="column" :repeated-items="lane.columns">
+                <div class="ww-kanban-grid-row">
+                    <wwLayoutItemContext
+                        v-for="(column, columnIndex) in lane.columns"
+                        :key="'ww-stack-' + laneIndex + '-' + columnIndex"
+                        :index="columnIndex"
+                        :item="null"
+                        is-repeat
+                        :data="column"
+                        :repeated-items="lane.columns"
+                    >
                         <wwElement
                             v-bind="content.stackElement"
                             :ww-props="{
@@ -100,37 +109,42 @@
                             :states="isDragging ? ['dragging'] : []"
                         ></wwElement>
                     </wwLayoutItemContext>
-                </template>
+                </div>
 
                 <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
                     <wwLayout path="laneFooterElement" class="ww-kanban-lane-footer"></wwLayout>
                 </wwLayoutItemContext>
-            </template>
+            </div>
 
-            <wwLayoutItemContext
-                v-for="(column, columnIndex) in boardColumns"
-                :key="'ww-stack-chrome-footer-' + columnIndex"
-                :index="columnIndex"
-                :item="null"
-                is-repeat
-                :data="column"
-                :repeated-items="boardColumns"
+            <div
+                class="ww-kanban-grid-row"
+                :class="{ 'ww-kanban-grid-row--sticky-bottom': content.stickyStackFooter }"
             >
-                <wwElement
-                    v-bind="content.stackElement"
-                    :ww-props="{
-                        ...stackConfig,
-                        items: [],
-                        stack: column.value,
-                        collapsed: isStackCollapsed(column.value),
-                        hideHeader: true,
-                        group: chromeGroup,
-                        sortable: false,
-                    }"
-                    class="ww-kanban-stack ww-kanban-stack--chrome"
-                    :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
-                ></wwElement>
-            </wwLayoutItemContext>
+                <wwLayoutItemContext
+                    v-for="(column, columnIndex) in boardColumns"
+                    :key="'ww-stack-chrome-footer-' + columnIndex"
+                    :index="columnIndex"
+                    :item="null"
+                    is-repeat
+                    :data="column"
+                    :repeated-items="boardColumns"
+                >
+                    <wwElement
+                        v-bind="content.stackElement"
+                        :ww-props="{
+                            ...stackConfig,
+                            items: [],
+                            stack: column.value,
+                            collapsed: isStackCollapsed(column.value),
+                            hideHeader: true,
+                            group: chromeGroup,
+                            sortable: false,
+                        }"
+                        class="ww-kanban-stack ww-kanban-stack--chrome"
+                        :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
+                    ></wwElement>
+                </wwLayoutItemContext>
+            </div>
         </div>
     </div>
 </template>
@@ -388,13 +402,17 @@ export default {
                 "--wrap-stacks": this.content.wrapStacks ? "wrap" : "nowrap",
             };
         },
-        gridStyle() {
-            // Column tracks size to content (auto) rather than a forced equal 1fr split, so
-            // whatever width each stack already has via the style panel keeps working instead
-            // of being overridden by the grid.
-            return {
-                "grid-template-columns": `repeat(${this.boardColumns.length}, auto)`,
-            };
+        gridTemplate() {
+            // Baked directly into the column-template string per column (same technique as
+            // kanvana's swimlane board), rather than left to per-cell state styling: a collapsed
+            // column needs the GRID TRACK itself to narrow, not just its visible content, or the
+            // column would still reserve full width and leave a gap. Expanded columns stay
+            // content-sized (minmax(0, auto)) so whatever width each stack has via the style
+            // panel keeps working instead of being forced into an equal split.
+            const collapsedWidth = this.content.collapsedStackWidth > 0 ? this.content.collapsedStackWidth : 60;
+            return this.boardColumns
+                .map((column) => (this.isStackCollapsed(column.value) ? `${collapsedWidth}px` : "minmax(0, auto)"))
+                .join(" ");
         },
         isReadonly() {
             /* wwEditor:start */
@@ -598,31 +616,42 @@ export default {
 }
 
 /*
- * display:grid lives here, not on .ww-kanban itself - the root's `display` is governed by
- * WeWeb's own style panel (see displayAllowedValues in ww-config.js, which only allows
- * flex/inline-flex there), so setting it from this component's own CSS would just lose that
- * specificity fight and silently do nothing, which is exactly what happened when this was tried
- * on the root directly: stacks rendered as plain wrapped flex items, no real columns/rows.
+ * .ww-kanban-grid itself is NOT a grid - it's a plain vertical stack (chrome header row, each
+ * lane, chrome footer row) that exists only to hold --kanban-grid-template as a CSS custom
+ * property. Every actual grid row (.ww-kanban-grid-row, used for the chrome rows and inside each
+ * lane) inherits that property and applies it independently, which is what keeps columns aligned
+ * across separate grid containers regardless of any wrapper markup in between.
+ *
+ * display:grid on those rows, not on .ww-kanban itself: the root's `display` is WeWeb-style-
+ * panel territory (see displayAllowedValues in ww-config.js, which only allows flex/inline-flex
+ * there) - overriding it from this component's own CSS would fight the style panel rather than
+ * cooperate with it.
  */
 .ww-kanban-grid {
-    display: grid;
-    align-items: start;
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
     min-width: 0;
 }
 
-.ww-kanban-lane-header,
-.ww-kanban-lane-footer {
-    grid-column: 1 / -1;
+.ww-kanban-grid-row {
+    display: grid;
+    grid-template-columns: var(--kanban-grid-template);
+    align-items: start;
 }
 
-.ww-kanban-grid--sticky-stack-header :deep(.ww-stack-header) {
+.ww-kanban-lane {
+    display: flex;
+    flex-direction: column;
+}
+
+.ww-kanban-grid-row--sticky-top {
     position: sticky;
     top: 0;
     z-index: 2;
 }
 
-.ww-kanban-grid--sticky-stack-footer :deep(.ww-stack-footer) {
+.ww-kanban-grid-row--sticky-bottom {
     position: sticky;
     bottom: 0;
     z-index: 2;
