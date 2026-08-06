@@ -1,13 +1,5 @@
 <template>
-    <div
-        class="ww-kanban"
-        :class="{
-            'ww-kanban--swimlanes': swimlanesEnabled,
-            'ww-kanban--sticky-stack-header': content.stickyStackHeader,
-            'ww-kanban--sticky-stack-footer': content.stickyStackFooter,
-        }"
-        :style="kanbanStyle"
-    >
+    <div class="ww-kanban" :style="kanbanStyle">
         <template v-if="!swimlanesEnabled">
             <template v-if="showUncategorizedStackColumn">
                 <wwLayoutItemContext :index="0" :item="null" :data="uncategorizedStack" is-repeat>
@@ -41,12 +33,25 @@
         <!--
             Swimlanes are a real grid, not lanes nesting stacks or the other way round: every
             cell below (chrome header row, each lane's cells, chrome footer row) is a direct
-            child of .ww-kanban and relies on CSS Grid auto-flow to land in the right row, with
-            only the lane header/footer explicitly spanning all columns. boardColumns is the one
-            fixed, board-wide column list every row iterates - so a column always lines up under
-            the same header regardless of which lanes are empty for it.
+            child of .ww-kanban-grid and relies on CSS Grid auto-flow to land in the right row,
+            with only the lane header/footer explicitly spanning all columns. boardColumns is the
+            one fixed, board-wide column list every row iterates - so a column always lines up
+            under the same header regardless of which lanes are empty for it.
+
+            This is a separate inner div rather than putting display:grid on .ww-kanban itself:
+            the root's `display` is WeWeb-style-panel territory (see displayAllowedValues in
+            ww-config.js, which only permits flex/inline-flex there) - overriding it from this
+            component's own CSS would fight the style panel rather than cooperate with it.
         -->
-        <template v-else>
+        <div
+            v-else
+            class="ww-kanban-grid"
+            :class="{
+                'ww-kanban-grid--sticky-stack-header': content.stickyStackHeader,
+                'ww-kanban-grid--sticky-stack-footer': content.stickyStackFooter,
+            }"
+            :style="gridStyle"
+        >
             <wwLayoutItemContext
                 v-for="(column, columnIndex) in boardColumns"
                 :key="'ww-stack-chrome-header-' + columnIndex"
@@ -126,7 +131,7 @@
                     :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
                 ></wwElement>
             </wwLayoutItemContext>
-        </template>
+        </div>
     </div>
 </template>
 
@@ -379,16 +384,17 @@ export default {
             };
         },
         kanbanStyle() {
-            const style = {
+            return {
                 "--wrap-stacks": this.content.wrapStacks ? "wrap" : "nowrap",
             };
-            if (this.swimlanesEnabled) {
-                // Column tracks size to content (auto) rather than a forced equal 1fr split, so
-                // whatever width each stack already has via the style panel keeps working instead
-                // of being overridden by the grid.
-                style["grid-template-columns"] = `repeat(${this.boardColumns.length}, auto)`;
-            }
-            return style;
+        },
+        gridStyle() {
+            // Column tracks size to content (auto) rather than a forced equal 1fr split, so
+            // whatever width each stack already has via the style panel keeps working instead
+            // of being overridden by the grid.
+            return {
+                "grid-template-columns": `repeat(${this.boardColumns.length}, auto)`,
+            };
         },
         isReadonly() {
             /* wwEditor:start */
@@ -589,11 +595,20 @@ export default {
 .ww-kanban {
     flex-direction: row;
     flex-wrap: var(--wrap-stacks);
+}
 
-    &.ww-kanban--swimlanes {
-        display: grid;
-        align-items: start;
-    }
+/*
+ * display:grid lives here, not on .ww-kanban itself - the root's `display` is governed by
+ * WeWeb's own style panel (see displayAllowedValues in ww-config.js, which only allows
+ * flex/inline-flex there), so setting it from this component's own CSS would just lose that
+ * specificity fight and silently do nothing, which is exactly what happened when this was tried
+ * on the root directly: stacks rendered as plain wrapped flex items, no real columns/rows.
+ */
+.ww-kanban-grid {
+    display: grid;
+    align-items: start;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .ww-kanban-lane-header,
@@ -601,13 +616,13 @@ export default {
     grid-column: 1 / -1;
 }
 
-.ww-kanban--sticky-stack-header :deep(.ww-stack-header) {
+.ww-kanban-grid--sticky-stack-header :deep(.ww-stack-header) {
     position: sticky;
     top: 0;
     z-index: 2;
 }
 
-.ww-kanban--sticky-stack-footer :deep(.ww-stack-footer) {
+.ww-kanban-grid--sticky-stack-footer :deep(.ww-stack-footer) {
     position: sticky;
     bottom: 0;
     z-index: 2;
