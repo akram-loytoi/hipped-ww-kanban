@@ -57,7 +57,11 @@
             which only permits flex/inline-flex there) - overriding it from this component's own
             CSS would fight the style panel rather than cooperate with it.
         -->
-        <div v-else class="ww-kanban-grid" :style="{ '--kanban-grid-template': gridTemplate }">
+        <div
+            v-else
+            class="ww-kanban-grid"
+            :style="{ '--kanban-grid-template': gridTemplate, '--kanban-board-min-width': boardMinWidth + 'px' }"
+        >
             <div
                 class="ww-kanban-chrome-row"
                 :class="{ 'ww-kanban-chrome-row--sticky-top': content.stickyStackHeader }"
@@ -416,6 +420,16 @@ export default {
                 "--wrap-stacks": this.content.wrapStacks ? "wrap" : "nowrap",
             };
         },
+        stackColumnFloorWidths() {
+            // Each stack column's floor width - collapsed columns have exactly one width, and
+            // for expanded columns this is the minimum the minmax() track in gridTemplate can
+            // ever shrink to. Shared by gridTemplate (the track sizing) and boardMinWidth (the
+            // sum used to give hipped-ww-lane's root a definite width) so the two can't drift
+            // out of sync with each other.
+            const collapsedWidth = this.content.collapsedStackWidth > 0 ? this.content.collapsedStackWidth : 60;
+            const minWidth = this.content.stackMinWidth > 0 ? this.content.stackMinWidth : 240;
+            return this.boardColumns.map((column) => (this.isStackCollapsed(column.value) ? collapsedWidth : minWidth));
+        },
         gridTemplate() {
             // Baked directly into the column-template string per column (same technique as
             // kanvana's swimlane board), rather than left to per-cell state styling: a collapsed
@@ -428,17 +442,25 @@ export default {
             // sliver with items bleeding across column boundaries. A real minimum means the board
             // overflows and scrolls horizontally once columns don't fit, matching how the
             // original flex-based layout behaved with wrapStacks off.
-            const collapsedWidth = this.content.collapsedStackWidth > 0 ? this.content.collapsedStackWidth : 60;
-            const minWidth = this.content.stackMinWidth > 0 ? this.content.stackMinWidth : 240;
             const stackTracks = this.boardColumns
-                .map((column) =>
-                    this.isStackCollapsed(column.value) ? `${collapsedWidth}px` : `minmax(${minWidth}px, 1fr)`
+                .map((column, index) =>
+                    this.isStackCollapsed(column.value) ? `${this.stackColumnFloorWidths[index]}px` : `minmax(${this.stackColumnFloorWidths[index]}px, 1fr)`
                 )
                 .join(" ");
             // Leading track holds the lane-header column - one shared template string used
             // identically by every grid on the board (the chrome rows and every hipped-ww-lane
             // instance), rather than this width being kept in sync across a separate mechanism.
             return `${this.laneHeaderWidthValue}px ${stackTracks}`;
+        },
+        boardMinWidth() {
+            // The board's actual floor width (lane-header column + every stack column's own
+            // floor) - given to hipped-ww-lane as a DEFINITE width (see gridCssVars/CSS below)
+            // rather than letting its root size itself via width:max-content. A grid's 1fr
+            // tracks can't compute "share of remaining space" against an indefinite (content-
+            // derived) container width, so max-content made every 1fr stack column collapse to
+            // its bare minimum instead of filling available space - a definite width (this
+            // value, or 100%, whichever is bigger) keeps 1fr working correctly either way.
+            return this.laneHeaderWidthValue + this.stackColumnFloorWidths.reduce((sum, width) => sum + width, 0);
         },
         laneHeaderWidthValue() {
             return this.laneHeaderCollapsed
