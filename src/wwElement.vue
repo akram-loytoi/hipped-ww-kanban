@@ -62,7 +62,11 @@
                 class="ww-kanban-chrome-row"
                 :class="{ 'ww-kanban-chrome-row--sticky-top': content.stickyStackHeader }"
             >
-                <wwLayout path="laneColumnHeaderElement" class="ww-kanban-lane-edge"></wwLayout>
+                <wwLayout
+                    path="laneColumnHeaderElement"
+                    class="ww-kanban-lane-edge"
+                    :class="{ 'ww-kanban-lane-edge--sticky': content.stickyLaneHeader }"
+                ></wwLayout>
 
                 <wwLayoutItemContext
                     v-for="(column, columnIndex) in boardColumns"
@@ -698,5 +702,14 @@ export default {
     position: sticky;
     bottom: 0;
     z-index: 2;
+}
+
+// Same stickyLaneHeader toggle as .ww-lane-header (hipped-ww-lane applies this to itself
+// internally) - this one lives directly in ww-kanban's own template, no cross-component CSS
+// needed, so it can just be a normal class + rule here.
+.ww-kanban-lane-edge--sticky {
+    position: sticky;
+    left: 0;
+    z-index: 3;
 }
 </style>
