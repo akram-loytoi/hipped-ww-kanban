@@ -1,5 +1,13 @@
 <template>
-    <div class="ww-kanban" :class="{ 'ww-kanban--swimlanes': swimlanesEnabled }" :style="kanbanStyle">
+    <div
+        class="ww-kanban"
+        :class="{
+            'ww-kanban--swimlanes': swimlanesEnabled,
+            'ww-kanban--sticky-stack-header': content.stickyStackHeader,
+            'ww-kanban--sticky-stack-footer': content.stickyStackFooter,
+        }"
+        :style="kanbanStyle"
+    >
         <template v-if="!swimlanesEnabled">
             <template v-if="content.uncategorizedStack && (!hideEmptyStacks || uncategorizedStack.count > 0)">
                 <wwLayoutItemContext :index="0" :item="null" :data="uncategorizedStack" is-repeat>
@@ -9,6 +17,7 @@
                             ...stackConfig,
                             items: uncategorizedStack.items,
                             stack: null,
+                            collapsed: isStackCollapsed(null),
                         }"
                         class="ww-kanban-stack"
                         :states="isDragging ? ['dragging'] : []"
@@ -20,7 +29,7 @@
                 <wwLayoutItemContext :index="index" :item="null" is-repeat :data="stack" :repeated-items="internalStacks">
                     <wwElement
                         v-bind="content.stackElement"
-                        :ww-props="{ ...stackConfig, items: stack.items, stack: stack.value }"
+                        :ww-props="{ ...stackConfig, items: stack.items, stack: stack.value, collapsed: isStackCollapsed(stack.value) }"
                         class="ww-kanban-stack"
                         :class="{ 'ww-kanban-stack--over-limit': stack.isOverLimit }"
                         :states="isDragging ? ['dragging'] : []"
@@ -50,6 +59,7 @@
                                     items: lane.uncategorizedStack.items,
                                     stack: null,
                                     lane: lane.value,
+                                    collapsed: isStackCollapsed(null),
                                 }"
                                 class="ww-kanban-stack"
                                 :states="isDragging ? ['dragging'] : []"
@@ -61,7 +71,13 @@
                         <wwLayoutItemContext :index="stackIndex" :item="null" is-repeat :data="stack" :repeated-items="lane.stacks">
                             <wwElement
                                 v-bind="content.stackElement"
-                                :ww-props="{ ...stackConfig, items: stack.items, stack: stack.value, lane: lane.value }"
+                                :ww-props="{
+                                    ...stackConfig,
+                                    items: stack.items,
+                                    stack: stack.value,
+                                    lane: lane.value,
+                                    collapsed: isStackCollapsed(stack.value),
+                                }"
                                 class="ww-kanban-stack"
                                 :class="{ 'ww-kanban-stack--over-limit': stack.isOverLimit }"
                                 :states="isDragging ? ['dragging'] : []"
@@ -149,6 +165,16 @@ export default {
             isDraggingManager[`${lane ?? ""}::${stack ?? ""}`] = isDragging;
         });
 
+        // Collapse is deliberately keyed by stack value alone, not stack+lane: a stack's header
+        // is now only ever rendered once (see the dedup CSS below), so it's the only click target
+        // available, and collapsing it collapses that column in every lane at once rather than
+        // each lane's cell independently.
+        const collapsedStacks = reactive({});
+        provide("customCollapseHandler", ({ stack }) => {
+            const key = stack ?? "";
+            collapsedStacks[key] = !collapsedStacks[key];
+        });
+
         const { setValue: setDrag } = wwLib.wwVariable.useComponentVariable({
             uid: props.uid,
             name: "isDragging",
@@ -182,7 +208,7 @@ export default {
             { deep: true }
         );
 
-        return { isDragging };
+        return { isDragging, collapsedStacks };
     },
     computed: {
         stacks() {
@@ -335,6 +361,12 @@ export default {
                 this._setLaneCounts(value);
             },
         },
+        collapsedStacks: {
+            deep: true,
+            handler(value) {
+                this._setCollapsedStacks(Object.keys(value).filter((key) => value[key]));
+            },
+        },
     },
     created() {
         // Not inside setup() because the counts they publish are derived from the Options-API
@@ -354,10 +386,19 @@ export default {
             defaultValue: [],
             readonly: true,
         });
+        const { setValue: setCollapsedStacks } = wwLib.wwVariable.useComponentVariable({
+            uid: this.uid,
+            name: "collapsedStacks",
+            type: "array",
+            defaultValue: [],
+            readonly: true,
+        });
         this._setStackCounts = setStackCounts;
         this._setLaneCounts = setLaneCounts;
+        this._setCollapsedStacks = setCollapsedStacks;
         setStackCounts(this.stackCounts);
         setLaneCounts(this.laneCounts);
+        setCollapsedStacks(Object.keys(this.collapsedStacks).filter((key) => this.collapsedStacks[key]));
     },
     methods: {
         buildStacks(items) {
@@ -398,8 +439,16 @@ export default {
             });
             const limit = this.content.laneWipLimit;
             const count = laneItems.length;
+            // Lanes have no bound "row" of their own (they're discovered from items, not
+            // configured like stacks), so a human-friendly label - distinct from the raw
+            // grouping value - can only come from a field on one of the lane's own items.
+            const label = isUncategorized
+                ? "Uncategorized"
+                : this.content.lanedByLabel && laneItems[0]
+                ? wwLib.resolveObjectPropertyPath(laneItems[0], this.content.lanedByLabel) ?? String(laneValue)
+                : String(laneValue);
             return {
-                label: isUncategorized ? "Uncategorized" : String(laneValue),
+                label,
                 value: isUncategorized ? null : laneValue,
                 isUncategorized,
                 count,
@@ -409,6 +458,9 @@ export default {
                 stacks: this.buildStacks(laneItems),
                 uncategorizedStack: this.buildUncategorizedStack(laneItems),
             };
+        },
+        isStackCollapsed(stackValue) {
+            return !!this.collapsedStacks[stackValue ?? ""];
         },
         compareItems(a, b) {
             if (!this.content.sortedBy) return 0;
@@ -484,5 +536,32 @@ export default {
     display: flex;
     flex-direction: row;
     flex-wrap: var(--wrap-stacks);
+}
+
+/*
+ * Every lane renders its own ww-stack cell per stack, each with its own headerElement/
+ * footerElement - but that content is identical across lanes for a given stack (same label,
+ * same bound design), so showing it once per lane is pure duplication. Only the first visible
+ * lane's header/footer stays on screen; the rest are hidden with display:none (not removed -
+ * the stack's collapse control still lives inside that first header, and collapsing it now
+ * applies to every lane's cell for that stack at once, see customCollapseHandler).
+ */
+.ww-kanban--swimlanes .ww-kanban-lane:not(:first-child) {
+    :deep(.ww-stack-header),
+    :deep(.ww-stack-footer) {
+        display: none;
+    }
+}
+
+.ww-kanban--sticky-stack-header :deep(.ww-stack-header) {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.ww-kanban--sticky-stack-footer :deep(.ww-stack-footer) {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
 }
 </style>

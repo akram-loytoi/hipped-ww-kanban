@@ -26,8 +26,9 @@ export default {
         customSettingsPropertiesOrder: [
             "items",
             ["itemKey", "stackedBy", "sortedBy", "sortOrder"],
-            ["swimlanesEnabled", "lanedBy"],
+            ["swimlanesEnabled", "lanedBy", "lanedByLabel"],
             ["laneSortedBy", "laneSortedByField", "laneSortOrder"],
+            ["stickyStackHeader", "stickyStackFooter"],
             "readonly",
             "draggingCursor",
             "customDragHandle",
@@ -205,6 +206,21 @@ export default {
             defaultValue: null,
             section: "settings",
         },
+        lanedByLabel: {
+            hidden: (content, sidepanelContent, boundProps) =>
+                !content.swimlanesEnabled || !showObjectPropertyPath("items", { content, boundProps }),
+            label: {
+                en: "Lane label",
+            },
+            type: "ObjectPropertyPath",
+            options: (content) => getObjectPropertyPathOptions("items", { content }),
+            defaultValue: null,
+            section: "settings",
+            propertyHelp: {
+                tooltip:
+                    "Optional. Field to display as the lane's label, if different from the field used to group by (Laned by). Resolved from the first item in each lane. Leave unset to just show the raw \"Laned by\" value.",
+            },
+        },
         laneSortedBy: {
             hidden: (content) => !content.swimlanesEnabled,
             label: {
@@ -328,6 +344,31 @@ export default {
                 tooltip: "A number setting the WIP limit per lane. Leave unset / 0 for no limit.",
             },
             /* wwEditor:end */
+        },
+        stickyStackHeader: {
+            label: {
+                en: "Sticky stack header",
+            },
+            type: "OnOff",
+            section: "settings",
+            bindable: true,
+            defaultValue: false,
+            propertyHelp: {
+                tooltip:
+                    "Pins each stack's header to the top of its nearest scrolling container. With swimlanes on, the header is only shown once per stack (not repeated per lane), so this keeps it visible while scrolling through lanes.",
+            },
+        },
+        stickyStackFooter: {
+            label: {
+                en: "Sticky stack footer",
+            },
+            type: "OnOff",
+            section: "settings",
+            bindable: true,
+            defaultValue: false,
+            propertyHelp: {
+                tooltip: "Pins each stack's footer to the bottom of its nearest scrolling container.",
+            },
         },
         stacks: {
             label: {
