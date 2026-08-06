@@ -31,164 +31,124 @@
         </template>
 
         <!--
-            A lane is a row, so its header sits at the horizontal start of that row - the first
-            track of the grid - not as a bar above it. Every grid row (chrome header, each lane,
-            chrome footer) is therefore boardColumns.length + 1 cells wide: a leading lane-header
-            cell, then one cell per stack column. The chrome rows have no lane to label, so their
-            leading cell is just an empty spacer sized to the same track - it still has to exist,
-            though, or the stack columns after it would land one track over from where every
-            lane's stack columns land.
+            A lane is a real child component now (content.laneElement, a hipped-ww-lane instance),
+            sibling to stackElement rather than a set of dropzones bolted onto ww-kanban directly.
+            It renders its own header dropzone and the stack cells for its row as genuine DOM
+            children (ww-kanban hands it columns/stackElement/stackConfig via ww-props and stays
+            "dumb" about how they're laid out internally) - this is what lets the lane's own
+            background/border/padding actually contain the cards, rather than sitting behind them
+            as an unrelated visual layer the way a dropzone-based background approximation did.
 
-            The lane-header column is deliberately NOT intrinsically sized (min-content/max-
-            content): it's an explicit, board-wide column with its own configurable width
-            (laneHeaderWidth/laneHeaderCollapsedWidth), the same "real number, not content-
-            dependent sizing" principle as the stack columns - intrinsic sizing on a track that
-            multiple independent grids (chrome row + every lane row) all need to size identically
-            is exactly what let content bleed into the next column over.
+            Column alignment comes from two CSS custom properties set once on .ww-kanban-grid and
+            read via inheritance everywhere else (the chrome rows here, and inside every
+            hipped-ww-lane instance's own scoped styles) - inheritance works across component
+            boundaries since custom properties follow the DOM tree, not Vue's component tree:
+              --kanban-grid-template: the stack-column grid-template-columns value
+              --kanban-lane-header-width: this board's lane-header slot width (shared by the
+                chrome rows' leading spacer and every lane's own header slot, so they all agree)
+            boardColumns is the one fixed, board-wide column list every row iterates, so a stack
+            column always exists in the same position regardless of which lanes are empty for it.
 
-            Column alignment overall comes from a single CSS custom property
-            (--kanban-grid-template) set once on .ww-kanban-grid: every independent grid row below
-            inherits that same value, so they line up regardless of what wrapper markup sits
-            between them. boardColumns is the one fixed, board-wide column list every row
-            iterates, so a stack column always exists in the same position regardless of which
-            lanes are empty for it.
-
-            display:grid lives on this inner div rather than on .ww-kanban itself: the root's
+            display:grid/flex live on this inner div rather than on .ww-kanban itself: the root's
             `display` is WeWeb-style-panel territory (see displayAllowedValues in ww-config.js,
             which only permits flex/inline-flex there) - overriding it from this component's own
             CSS would fight the style panel rather than cooperate with it.
         -->
-        <div v-else class="ww-kanban-grid" :style="{ '--kanban-grid-template': gridTemplate }">
+        <div
+            v-else
+            class="ww-kanban-grid"
+            :class="{ 'ww-kanban-grid--sticky-lane-header': content.stickyLaneHeader }"
+            :style="{ '--kanban-grid-template': gridTemplate, '--kanban-lane-header-width': laneHeaderWidthValue + 'px' }"
+        >
             <div
-                class="ww-kanban-grid-row"
-                :class="{ 'ww-kanban-grid-row--sticky-top': content.stickyStackHeader }"
+                class="ww-kanban-chrome-row"
+                :class="{ 'ww-kanban-chrome-row--sticky-top': content.stickyStackHeader }"
             >
                 <div class="ww-kanban-lane-edge"></div>
 
-                <wwLayoutItemContext
-                    v-for="(column, columnIndex) in boardColumns"
-                    :key="'ww-stack-chrome-header-' + columnIndex"
-                    :index="columnIndex"
-                    :item="null"
-                    is-repeat
-                    :data="column"
-                    :repeated-items="boardColumns"
-                >
-                    <wwElement
-                        v-bind="content.stackElement"
-                        :ww-props="{
-                            ...stackConfig,
-                            items: [],
-                            stack: column.value,
-                            collapsed: isStackCollapsed(column.value),
-                            hideFooter: true,
-                            group: chromeGroup,
-                            sortable: false,
-                        }"
-                        class="ww-kanban-stack ww-kanban-stack--chrome"
-                        :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
-                    ></wwElement>
-                </wwLayoutItemContext>
-            </div>
-
-            <!--
-                laneElement gives the row itself something stylable - background, border, the
-                works - the way stackElement already does for a column. It's a dropzone
-                (wwLayout), the same mechanism as laneHeaderElement/headerElement/itemElement -
-                NOT a nested element type reference (that only resolves real registered UUIDs,
-                which is why a stock-element shorthand there rendered as "Element undefined").
-                It can't literally CONTAIN the stack cells below (this is a fixed, standalone
-                dropzone slot, not something ww-kanban injects other rendered content into), so
-                it's a background layer: absolutely positioned to fill the row, sitting behind
-                the real header/cells via z-index, with pointer-events disabled so it never
-                intercepts drags meant for the interactive content on top of it.
-            -->
-            <div
-                v-for="(lane, laneIndex) in visibleLanes"
-                :key="'ww-lane-' + laneIndex"
-                class="ww-kanban-lane-wrapper"
-            >
-                <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
-                    <wwLayout
-                        path="laneElement"
-                        class="ww-kanban-lane-background"
-                        :class="{ 'ww-kanban-lane-background--collapsed': isLaneCollapsed(lane.value) }"
-                    ></wwLayout>
-                </wwLayoutItemContext>
-
-                <div
-                    class="ww-kanban-grid-row ww-kanban-lane"
-                    :class="{ 'ww-kanban-lane--collapsed': isLaneCollapsed(lane.value) }"
-                >
-                    <wwLayoutItemContext :index="laneIndex" :item="null" is-repeat :data="lane" :repeated-items="visibleLanes">
-                        <wwLayout
-                            :path="isLaneCollapsed(lane.value) ? 'collapsedLaneHeaderElement' : 'laneHeaderElement'"
-                            class="ww-kanban-lane-header"
-                            :class="{
-                                'ww-kanban-lane-header--collapsed': laneHeaderCollapsed,
-                                'ww-kanban-lane-header--sticky': content.stickyLaneHeader,
-                            }"
-                        ></wwLayout>
-                    </wwLayoutItemContext>
-
+                <div class="ww-kanban-chrome-cells">
                     <wwLayoutItemContext
-                        v-for="(column, columnIndex) in lane.columns"
-                        :key="'ww-stack-' + laneIndex + '-' + columnIndex"
+                        v-for="(column, columnIndex) in boardColumns"
+                        :key="'ww-stack-chrome-header-' + columnIndex"
                         :index="columnIndex"
                         :item="null"
                         is-repeat
                         :data="column"
-                        :repeated-items="lane.columns"
+                        :repeated-items="boardColumns"
                     >
                         <wwElement
                             v-bind="content.stackElement"
                             :ww-props="{
                                 ...stackConfig,
-                                items: column.items,
+                                items: [],
                                 stack: column.value,
-                                lane: lane.value,
                                 collapsed: isStackCollapsed(column.value),
-                                hideHeader: true,
                                 hideFooter: true,
+                                group: chromeGroup,
+                                sortable: false,
                             }"
-                            class="ww-kanban-stack"
+                            class="ww-kanban-stack ww-kanban-stack--chrome"
                             :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
-                            :states="isDragging ? ['dragging'] : []"
                         ></wwElement>
                     </wwLayoutItemContext>
                 </div>
             </div>
 
+            <wwLayoutItemContext
+                v-for="(lane, laneIndex) in visibleLanes"
+                :key="'ww-lane-' + laneIndex"
+                :index="laneIndex"
+                :item="null"
+                is-repeat
+                :data="lane"
+                :repeated-items="visibleLanes"
+            >
+                <wwElement
+                    v-bind="content.laneElement"
+                    :ww-props="{
+                        columns: lane.columns,
+                        stackElement: content.stackElement,
+                        stackConfig: stackConfig,
+                        lane: lane.value,
+                        isDragging: isDragging,
+                        collapsedStacks: collapsedStacks,
+                    }"
+                    class="ww-kanban-lane"
+                ></wwElement>
+            </wwLayoutItemContext>
+
             <div
-                class="ww-kanban-grid-row"
-                :class="{ 'ww-kanban-grid-row--sticky-bottom': content.stickyStackFooter }"
+                class="ww-kanban-chrome-row"
+                :class="{ 'ww-kanban-chrome-row--sticky-bottom': content.stickyStackFooter }"
             >
                 <div class="ww-kanban-lane-edge"></div>
 
-                <wwLayoutItemContext
-                    v-for="(column, columnIndex) in boardColumns"
-                    :key="'ww-stack-chrome-footer-' + columnIndex"
-                    :index="columnIndex"
-                    :item="null"
-                    is-repeat
-                    :data="column"
-                    :repeated-items="boardColumns"
-                >
-                    <wwElement
-                        v-bind="content.stackElement"
-                        :ww-props="{
-                            ...stackConfig,
-                            items: [],
-                            stack: column.value,
-                            collapsed: isStackCollapsed(column.value),
-                            hideHeader: true,
-                            group: chromeGroup,
-                            sortable: false,
-                        }"
-                        class="ww-kanban-stack ww-kanban-stack--chrome"
-                        :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
-                    ></wwElement>
-                </wwLayoutItemContext>
+                <div class="ww-kanban-chrome-cells">
+                    <wwLayoutItemContext
+                        v-for="(column, columnIndex) in boardColumns"
+                        :key="'ww-stack-chrome-footer-' + columnIndex"
+                        :index="columnIndex"
+                        :item="null"
+                        is-repeat
+                        :data="column"
+                        :repeated-items="boardColumns"
+                    >
+                        <wwElement
+                            v-bind="content.stackElement"
+                            :ww-props="{
+                                ...stackConfig,
+                                items: [],
+                                stack: column.value,
+                                collapsed: isStackCollapsed(column.value),
+                                hideHeader: true,
+                                group: chromeGroup,
+                                sortable: false,
+                            }"
+                            class="ww-kanban-stack ww-kanban-stack--chrome"
+                            :class="{ 'ww-kanban-stack--over-limit': column.isOverLimit }"
+                        ></wwElement>
+                    </wwLayoutItemContext>
+                </div>
             </div>
         </div>
     </div>
@@ -285,11 +245,6 @@ export default {
             defaultValue: false,
         });
 
-        // Keyed by lane value, unlike laneHeaderCollapsed above - each lane is a distinct row,
-        // so collapsing one shouldn't affect any other, the same principle collapsedStacks
-        // already uses per stack (just the other axis).
-        const collapsedLanes = reactive({});
-
         const { setValue: setDrag } = wwLib.wwVariable.useComponentVariable({
             uid: props.uid,
             name: "isDragging",
@@ -323,7 +278,7 @@ export default {
             { deep: true }
         );
 
-        return { isDragging, collapsedStacks, laneHeaderCollapsed, setLaneHeaderCollapsed, collapsedLanes };
+        return { isDragging, collapsedStacks, laneHeaderCollapsed, setLaneHeaderCollapsed };
     },
     computed: {
         stacks() {
@@ -476,24 +431,24 @@ export default {
             // original flex-based layout behaved with wrapStacks off.
             const collapsedWidth = this.content.collapsedStackWidth > 0 ? this.content.collapsedStackWidth : 60;
             const minWidth = this.content.stackMinWidth > 0 ? this.content.stackMinWidth : 240;
-            const stackTracks = this.boardColumns
+            // Stack columns only - the lane-header slot is a separate CSS var
+            // (--kanban-lane-header-width, see laneHeaderWidthValue) now that it's each
+            // hipped-ww-lane instance's own flex-sized header slot rather than a leading grid
+            // track shared across one combined template string.
+            return this.boardColumns
                 .map((column) =>
                     this.isStackCollapsed(column.value) ? `${collapsedWidth}px` : `minmax(${minWidth}px, 1fr)`
                 )
                 .join(" ");
-            // Leading track holds the lane header - an explicit width, same principle as the
-            // stack tracks above, not intrinsic (min-content/max-content) sizing. Several
-            // independent grids (the chrome row's empty spacer + every lane's actual header
-            // content) all need to size this track identically; leaving that to each row's own
-            // content is what let the header bleed into the first stack column.
-            const laneHeaderWidth = this.laneHeaderCollapsed
+        },
+        laneHeaderWidthValue() {
+            return this.laneHeaderCollapsed
                 ? this.content.laneHeaderCollapsedWidth > 0
                     ? this.content.laneHeaderCollapsedWidth
                     : 48
                 : this.content.laneHeaderWidth > 0
                 ? this.content.laneHeaderWidth
                 : 160;
-            return `${laneHeaderWidth}px ${stackTracks}`;
         },
         isReadonly() {
             /* wwEditor:start */
@@ -533,12 +488,6 @@ export default {
                 this._setCollapsedStacks(Object.keys(value).filter((key) => value[key]));
             },
         },
-        collapsedLanes: {
-            deep: true,
-            handler(value) {
-                this._setCollapsedLanes(Object.keys(value).filter((key) => value[key]));
-            },
-        },
     },
     created() {
         // Not inside setup() because the counts they publish are derived from the Options-API
@@ -565,21 +514,12 @@ export default {
             defaultValue: [],
             readonly: true,
         });
-        const { setValue: setCollapsedLanes } = wwLib.wwVariable.useComponentVariable({
-            uid: this.uid,
-            name: "collapsedLanes",
-            type: "array",
-            defaultValue: [],
-            readonly: true,
-        });
         this._setStackCounts = setStackCounts;
         this._setLaneCounts = setLaneCounts;
         this._setCollapsedStacks = setCollapsedStacks;
-        this._setCollapsedLanes = setCollapsedLanes;
         setStackCounts(this.stackCounts);
         setLaneCounts(this.laneCounts);
         setCollapsedStacks(Object.keys(this.collapsedStacks).filter((key) => this.collapsedStacks[key]));
-        setCollapsedLanes(Object.keys(this.collapsedLanes).filter((key) => this.collapsedLanes[key]));
     },
     methods: {
         buildStackCells(items, filterEmpty) {
@@ -654,18 +594,6 @@ export default {
         toggleLaneHeaderCollapsed() {
             this.setLaneHeaderCollapsed(!this.laneHeaderCollapsed);
         },
-        isLaneCollapsed(laneValue) {
-            return !!this.collapsedLanes[laneValue ?? ""];
-        },
-        // WeWeb passes action args through in a way I haven't verified elsewhere in this
-        // codebase (everything else here is a zero-argument action), so this defensively
-        // accepts either an { lane } object or a bare value - worth confirming this actually
-        // works as expected, unlike the rest of the action/dropzone patterns which are proven.
-        toggleLaneCollapsed(args) {
-            const laneValue = args && typeof args === "object" ? args.lane : args;
-            const key = laneValue ?? "";
-            this.collapsedLanes[key] = !this.collapsedLanes[key];
-        },
         compareItems(a, b) {
             if (!this.content.sortedBy) return 0;
             const valueA = wwLib.resolveObjectPropertyPath(a, this.content.sortedBy);
@@ -728,15 +656,16 @@ export default {
 
 /*
  * .ww-kanban-grid itself is NOT a grid - it's a plain vertical stack (chrome header row, each
- * lane, chrome footer row) that exists only to hold --kanban-grid-template as a CSS custom
- * property. Every actual grid row (.ww-kanban-grid-row, used for the chrome rows and inside each
- * lane) inherits that property and applies it independently, which is what keeps columns aligned
- * across separate grid containers regardless of any wrapper markup in between.
+ * lane instance, chrome footer row) that exists only to hold --kanban-grid-template and
+ * --kanban-lane-header-width as CSS custom properties. The chrome rows below and every
+ * hipped-ww-lane instance's own scoped styles read those via inheritance, which keeps columns
+ * aligned across separate components regardless of the Vue component boundary in between -
+ * custom properties follow the DOM tree, not Vue's component tree.
  *
- * display:grid on those rows, not on .ww-kanban itself: the root's `display` is WeWeb-style-
- * panel territory (see displayAllowedValues in ww-config.js, which only allows flex/inline-flex
- * there) - overriding it from this component's own CSS would fight the style panel rather than
- * cooperate with it.
+ * display:flex here (and display:grid on .ww-kanban-chrome-cells below) rather than on
+ * .ww-kanban itself: the root's `display` is WeWeb-style-panel territory (see
+ * displayAllowedValues in ww-config.js, which only allows flex/inline-flex there) - overriding
+ * it from this component's own CSS would fight the style panel rather than cooperate with it.
  */
 .ww-kanban-grid {
     display: flex;
@@ -749,55 +678,46 @@ export default {
     overflow-x: auto;
 }
 
-.ww-kanban-grid-row {
+// Mirrors hipped-ww-lane's own .ww-lane/.ww-lane-header/.ww-lane-body structure exactly, so the
+// chrome rows' leading spacer + inner grid line up with every lane's actual header + cells.
+.ww-kanban-chrome-row {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.ww-kanban-lane-edge {
+    flex: 0 0 var(--kanban-lane-header-width, auto);
+    min-width: 0;
+}
+
+.ww-kanban-chrome-cells {
     display: grid;
     grid-template-columns: var(--kanban-grid-template);
     align-items: start;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
-.ww-kanban-grid-row--sticky-top {
+.ww-kanban-chrome-row--sticky-top {
     position: sticky;
     top: 0;
     z-index: 2;
 }
 
-.ww-kanban-grid-row--sticky-bottom {
+.ww-kanban-chrome-row--sticky-bottom {
     position: sticky;
     bottom: 0;
     z-index: 2;
 }
 
-.ww-kanban-lane-header--sticky {
+// Reaches into every hipped-ww-lane instance's own header slot - :deep() penetrates DOM
+// descendants regardless of the component boundary, unlike stickyStackHeader/Footer above which
+// just stick the whole chrome row (there's no per-instance header to individually target there,
+// it's a single shared row).
+.ww-kanban-grid--sticky-lane-header :deep(.ww-lane-header) {
     position: sticky;
     left: 0;
     z-index: 3;
-}
-
-.ww-kanban-lane-wrapper {
-    position: relative;
-}
-
-.ww-kanban-lane-background {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-}
-
-.ww-kanban-grid-row.ww-kanban-lane {
-    position: relative;
-    z-index: 1;
-}
-
-/*
- * Collapsing a lane hides only its stack cells (.ww-kanban-stack), not the whole row - the
- * lane-header cell stays, both because it's the only remaining click target for re-expanding
- * and because hiding it too would lose the label saying which lane this even is. The row's
- * height then naturally shrinks to whatever the header needs, no explicit height required (this
- * isn't a grid-track width problem the way stack collapse was - .ww-kanban-grid is flex, not
- * grid, so ordinary content-driven height works here).
- */
-.ww-kanban-lane--collapsed .ww-kanban-stack {
-    display: none;
 }
 </style>

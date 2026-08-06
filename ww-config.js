@@ -46,17 +46,6 @@ export default {
             label: { en: "Toggle lane header" },
             action: "toggleLaneHeaderCollapsed",
         },
-        {
-            label: { en: "Toggle lane" },
-            action: "toggleLaneCollapsed",
-            args: [
-                {
-                    name: "lane",
-                    label: { en: "Lane value" },
-                    type: "Text",
-                },
-            ],
-        },
     ],
     triggerEvents: [
         {
@@ -89,27 +78,14 @@ export default {
         },
         laneElement: {
             hidden: true,
-            // A dropzone (array), same mechanism as headerElement/itemElement/laneHeaderElement -
-            // NOT a nested element type reference. Only needs to be stylable (background/border/
-            // padding for the whole row), never functional, so a plain stock container as the
-            // default is enough - no reason to fork a dedicated element for it.
-            defaultValue: [{ isWwObject: true, type: "ww-flexbox" }],
-            navigator: {
-                group: "Lane background",
-            },
-        },
-        laneHeaderElement: {
-            hidden: true,
-            defaultValue: [{ isWwObject: true, type: "ww-flexbox" }],
-            navigator: {
-                group: "Lane header",
-            },
-        },
-        collapsedLaneHeaderElement: {
-            hidden: true,
-            defaultValue: [{ isWwObject: true, type: "ww-flexbox" }],
-            navigator: {
-                group: "Collapsed lane header",
+            // A real nested component reference, sibling to stackElement, not a dropzone -
+            // hipped-ww-lane owns its own headerElement dropzone and internally renders the
+            // stack cells it's handed via ww-props as genuine children, which is what lets its
+            // own background/border/padding actually contain the cards.
+            //hipped-ww-lane
+            defaultValue: {
+                isWwObject: true,
+                type: "TODO-hipped-ww-lane-type-id",
             },
         },
         wrapStacks: {
