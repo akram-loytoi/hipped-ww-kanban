@@ -650,6 +650,11 @@ export default {
         compareLanes(a, b) {
             const mode = this.content.laneSortedBy || "label";
             const direction = this.content.laneSortOrder === "desc" ? -1 : 1;
+            if (mode === "custom" && this.content.laneSortFn) {
+                // Unlike the other modes, a custom sort value can be an array (multi-key sort),
+                // so this goes through compareSortValues instead of the scalar `>` compare below.
+                return this.compareSortValues(this.resolveLaneSortValue(a), this.resolveLaneSortValue(b)) * direction;
+            }
             let valueA;
             let valueB;
             if (mode === "count") {
@@ -667,6 +672,29 @@ export default {
             }
             if (valueA === valueB) return 0;
             return valueA > valueB ? direction : -direction;
+        },
+        resolveLaneSortValue(lane) {
+            // laneSortFn is a raw Formula binding (type: 'Formula' in ww-config.js), not a
+            // pre-resolved value - resolveMappingFormula evaluates it with the lane exposed as
+            // context.mapping, alongside the usual variables/collections/context access any
+            // formula binding gets. Same mechanism the array-mapping formulas already use.
+            const { resolveMappingFormula } = wwLib.wwFormula.useFormula();
+            return resolveMappingFormula(this.content.laneSortFn, lane);
+        },
+        compareSortValues(a, b) {
+            if (Array.isArray(a) || Array.isArray(b)) {
+                return this.compareArrays(Array.isArray(a) ? a : [a], Array.isArray(b) ? b : [b]);
+            }
+            if (a === b) return 0;
+            return a > b ? 1 : -1;
+        },
+        compareArrays(a, b) {
+            const length = Math.max(a.length, b.length);
+            for (let i = 0; i < length; i++) {
+                const result = this.compareSortValues(a[i], b[i]);
+                if (result !== 0) return result;
+            }
+            return 0;
         },
         /* wwEditor:start */
         getTestEvent() {

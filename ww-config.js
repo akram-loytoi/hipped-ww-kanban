@@ -27,7 +27,7 @@ export default {
             "items",
             ["itemKey", "stackedBy", "sortedBy", "sortOrder"],
             ["swimlanesEnabled", "lanedBy", "lanedByLabel"],
-            ["laneSortedBy", "laneSortedByField", "laneSortOrder"],
+            ["laneSortedBy", "laneSortedByField", "laneSortFn", "laneSortOrder"],
             ["laneHeaderWidth", "laneHeaderCollapsedWidth", "stickyLaneHeader"],
             ["stickyStackHeader", "stickyStackFooter"],
             ["stackMinWidth", "collapsedStackWidth"],
@@ -311,6 +311,7 @@ export default {
                     { value: "label", label: "Label (A-Z)", default: true },
                     { value: "count", label: "Item count" },
                     { value: "field", label: "Bound field" },
+                    { value: "custom", label: "Custom function" },
                 ],
             },
             defaultValue: "label",
@@ -319,7 +320,7 @@ export default {
             /* wwEditor:start */
             bindingValidation: {
                 type: "string",
-                tooltip: "Valid values: label | count | field",
+                tooltip: "Valid values: label | count | field | custom",
             },
             /* wwEditor:end */
         },
@@ -335,6 +336,41 @@ export default {
             options: (content) => getObjectPropertyPathOptions("items", { content }),
             defaultValue: null,
             section: "settings",
+        },
+        laneSortFn: {
+            hidden: (content) => !content.swimlanesEnabled || content.laneSortedBy !== "custom",
+            label: {
+                en: "Lane sort function",
+            },
+            type: "Formula",
+            section: "settings",
+            options: () => ({
+                // Sample lane shape so the formula editor can autocomplete context.mapping.* -
+                // matches exactly what buildLane() in wwElement.vue produces per lane.
+                template: {
+                    label: "Lane label",
+                    value: "lane-value",
+                    isUncategorized: false,
+                    count: 0,
+                    limit: null,
+                    isOverLimit: false,
+                    items: [],
+                    stacks: [],
+                    columns: [],
+                },
+            }),
+            defaultValue: { type: "f", code: "context.mapping?.label" },
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "string",
+                tooltip:
+                    "Evaluated once per lane via resolveMappingFormula - the lane object is available as context.mapping (not as a bare variable). Return a primitive, or an array for multi-key sort (compared element-by-element).",
+            },
+            propertyHelp: {
+                tooltip:
+                    'Only used when "Lanes sorted by" is set to "Custom function". Has full access to variables, collections and context like any other formula binding, so it can pull in data from other collections entirely, not just fields already on the lane\'s items.',
+            },
+            /* wwEditor:end */
         },
         laneSortOrder: {
             hidden: (content) => !content.swimlanesEnabled,
