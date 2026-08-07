@@ -344,21 +344,42 @@ export default {
             },
             type: "Formula",
             section: "settings",
-            options: () => ({
-                // Sample lane shape so the formula editor can autocomplete context.mapping.* -
-                // matches exactly what buildLane() in wwElement.vue produces per lane.
-                template: {
-                    label: "Lane label",
-                    value: "lane-value",
-                    isUncategorized: false,
-                    count: 0,
-                    limit: null,
-                    isOverLimit: false,
-                    items: [],
-                    stacks: [],
-                    columns: [],
-                },
-            }),
+            options: (content) => {
+                // A real sample built from the actual bound items/lanedBy/lanedByLabel, not a
+                // static skeleton - same convention arrayPropertyIdFormula uses elsewhere
+                // (deriving its template from a real bound item), so the formula editor's
+                // context.mapping.* picker shows this board's actual field names and values
+                // instead of an empty placeholder. stacks/columns are left empty here since
+                // reproducing the full stack-grouping pipeline just for this preview isn't
+                // worth the duplication - the lane's identity (label/value/items) is what a
+                // sort function overwhelmingly needs.
+                const items = wwLib.wwCollection.getCollectionData(content.items) || [];
+                const sampleItem =
+                    items.find((item) => content.lanedBy && wwLib.resolveObjectPropertyPath(item, content.lanedBy) != null) ||
+                    items[0] ||
+                    null;
+                const laneValue = sampleItem && content.lanedBy ? wwLib.resolveObjectPropertyPath(sampleItem, content.lanedBy) : "lane-value";
+                const laneItems = content.lanedBy
+                    ? items.filter((item) => wwLib.resolveObjectPropertyPath(item, content.lanedBy) === laneValue)
+                    : items.slice(0, 1);
+                const label =
+                    content.lanedByLabel && sampleItem
+                        ? wwLib.resolveObjectPropertyPath(sampleItem, content.lanedByLabel) ?? String(laneValue)
+                        : String(laneValue ?? "Lane label");
+                return {
+                    template: {
+                        label,
+                        value: laneValue,
+                        isUncategorized: false,
+                        count: laneItems.length,
+                        limit: null,
+                        isOverLimit: false,
+                        items: laneItems,
+                        stacks: [],
+                        columns: [],
+                    },
+                };
+            },
             defaultValue: { type: "f", code: "context.mapping?.label" },
             /* wwEditor:start */
             bindingValidation: {
